@@ -1,4 +1,4 @@
-#include disk_routines.h
+#include "disk_routines.h"
 
 // Multiplying by 2 to account for passing boot block and super block
 // put these in main
@@ -67,13 +67,32 @@ unsigned int search_dir(char *file_name, struct ext2_inode *dir_inode){
 }
 
 /* Given a path as a string, return the inode number of the 
- * last file in the path.
+ * last file in the path. -1 if path invalid.
  */
-unsigned int get_inode_num(char *path, unsigned char *disk_ptr, unsigned int inode_num){
+unsigned int get_inode_num(char *path, unsigned int relative_path_inode){
 	
-    char *next_slash;
-	char dir_str[DIR_STR_LEN] = path;
-	if ((next_slash = strchr(path, '/')) != NULL){
-	   strncpy(dir_str, path, next_slash - path);
-	}
+    // Assume path begins with a slash
+    char *trimmed_root = path + 1;
+    char *end_ptr;
+	char dir_str[DIR_STR_LEN];
+    unsigned int next_inode;
+    int trimmed_len;
+
+    if ((trimmed_len = strlen(trimmed_root)) == 0){
+        return relative_path_inode;
+    }
+
+	if ((end_ptr = strchr(trimmed_root, '/')) != NULL){
+	   strncpy(dir_str, trimmed_root, end_ptr - trimmed_root);
+	} else {
+        strncpy(dir_str, trimmed_root, DIR_STR_LEN);
+        end_ptr = dir_str + trimmed_len - 1;
+    }
+
+    if ((next_inode = search_dir(dir_str, relative_path_inode)) == -1){
+        return -1;
+    }
+
+    return get_inode_num(end_ptr, next_inode);
+
 }

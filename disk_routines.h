@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <sys/mman.h>
 #include "ext2.h"
 #ifndef ROUTINES
 #define ROUTINES
