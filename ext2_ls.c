@@ -13,6 +13,8 @@ void print_entries(struct ext2_inode *dir_inode, int a_flag){
 
 	for(i = 0; i < 12; ++i){
         if (((unsigned int) pow(2, dir_inode->i_block[i])) | group_desc->bg_block_bitmap){
+
+            // Keep track of beginning to ensure block overflow doesn't occur
             first_entry = disk + dir_inode->i_block[i] * EXT2_BLOCK_SIZE;
             cur_entry = first_entry;
 
@@ -25,13 +27,17 @@ void print_entries(struct ext2_inode *dir_inode, int a_flag){
                 	const char *dir_entry_name = dir_entry->name;
                 	const size_t name_len = (size_t) dir_entry->name_len;
 
+                	// If the all flag is present or the directory is not . or ..
 					if (a_flag || !((strncmp(dir_entry_name, cur_dir, name_len) == 0)
                 			   	    || (strncmp(dir_entry_name, parent_dir, name_len) == 0))){
 
 						printf("%.*s\n", (int) name_len, dir_entry_name);
                 	}
                 }
+
+                // Skip to the next entry
                 cur_entry += ((struct ext2_dir_entry_2 *) cur_entry)->rec_len;
+
             } while ((cur_entry - first_entry) % EXT2_BLOCK_SIZE != 0);
         } else {
             break;
@@ -55,8 +61,10 @@ int main(int argc, char **argv){
     	exit(1);
     }
 
+    // Skip two blocks ahead to pass boot and super blocks
     group_desc = (struct ext2_group_desc *) (disk + 2 * EXT2_BLOCK_SIZE);
 
+    // Check for the "all" flag
 	if (strncmp(argv[2], "-a", 2) == 0){
 		a_flag = 1;
 		path_index = 3;
@@ -69,16 +77,20 @@ int main(int argc, char **argv){
 
 	dir_inode = fetch_inode_from_num(dir_inode_num);
 	
+
+	// Handle the case where ls is called on a file instead of a dir
 	if (S_ISDIR(dir_inode->i_mode)){
 		print_entries(dir_inode, a_flag);
 
-		// Indirect inode
+		// First level of inode indirection
 		indirect_dir_inode_num = dir_inode->i_block[12];
 
+		// For use in bitmap check
 		indirect_num_one_hot = pow(2, indirect_dir_inode_num);
 		if (indirect_dir_inode_num >= 1 && indirect_num_one_hot | group_desc->bg_inode_bitmap){
 			print_entries(fetch_inode_from_num(indirect_dir_inode_num), a_flag);
 		}
+
 	} else if (S_ISREG(dir_inode->i_mode)){
 		char *last_slash = strrchr(argv[path_index], '/');
 		last_slash += 1;
