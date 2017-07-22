@@ -1,31 +1,29 @@
 #include "disk_routines.h"
 
-// Multiplying by 2 to account for passing boot block and super block
-// put these in main
-struct ext2_group_desc *group_desc = (struct ext2_group_desc *)
-                                            (disk + 2 * EXT2_BLOCK_SIZE);
-struct ext2_inode *inode_table = (struct ext2_inode *)(disk + group_desc->bg_inode_table 
-                                                              * EXT2_BLOCK_SIZE);
-
 /* Returns a pointer to the inode in the memory mapped into by
  * disk corresponding to inode_num.
  */
-struct ext2_inode *fetch_inode(unsigned int inode_num){
-
-    return inode_table + (inode_table * sizeof(ext2_inode));
+struct ext2_inode *fetch_inode_from_num(unsigned int inode_num){
+    struct ext2_group_desc *group_desc = (struct ext2_group_desc *)
+                                            (disk + 2 * EXT2_BLOCK_SIZE);
+    struct ext2_inode *inode_table = (struct ext2_inode *)(disk + group_desc->bg_inode_table 
+                                                                  * EXT2_BLOCK_SIZE);
+    return inode_table + inode_num - 1;
 }
 
 int search_dir_direct_blks(char * file_name, struct ext2_inode *dir_inode) {
     int i;
-    char *first_entry;
-    char *cur_entry;
+    unsigned char *first_entry;
+    unsigned char *cur_entry;
+    struct ext2_group_desc *group_desc = (struct ext2_group_desc *)
+                                            (disk + 2 * EXT2_BLOCK_SIZE);
 
     if (S_ISDIR(dir_inode->i_mode) != 1){
         return -1;
     }
 
     for(i = 0; i < 12; ++i){
-        if ((2 ** dir_inode->i_block[i]) | group_desc->bg_block_bitmap){
+        if (((unsigned int) pow(2, dir_inode->i_block[i])) | group_desc->bg_block_bitmap){
             first_entry = disk + dir_inode->i_block[i] * EXT2_BLOCK_SIZE;
             cur_entry = first_entry;
 
@@ -35,7 +33,10 @@ int search_dir_direct_blks(char * file_name, struct ext2_inode *dir_inode) {
                 const size_t name_len = (size_t) dir_entry->name_len;
 
                 // TODO: Ask: can we still assume 1 is the bad inode?
-                if ((strncmp(file_name, dir_entry_name, name_len) == 0) && (dir_entry->inode >= 1)) {
+                if ((strncmp(file_name, dir_entry_name, name_len) == 0) 
+                    && strlen(file_name) == name_len
+                    && (dir_entry->inode >= 1)) {
+                    
                     return  dir_entry->inode;
                 }
                 cur_entry += ((struct ext2_dir_entry_2 *) cur_entry)->rec_len;
@@ -54,7 +55,10 @@ int search_dir_direct_blks(char * file_name, struct ext2_inode *dir_inode) {
  */
 unsigned int search_dir(char *file_name, struct ext2_inode *dir_inode){
     unsigned int inode_num_file_name;
-
+    struct ext2_group_desc *group_desc = (struct ext2_group_desc *)
+                                            (disk + 2 * EXT2_BLOCK_SIZE);
+    struct ext2_inode *inode_table = (struct ext2_inode *)(disk + group_desc->bg_inode_table 
+                                                                  * EXT2_BLOCK_SIZE);
     if((inode_num_file_name = search_dir_direct_blks(file_name, dir_inode)) == -1) {
 
         // Search remaining the indirect blocks
@@ -62,14 +66,17 @@ unsigned int search_dir(char *file_name, struct ext2_inode *dir_inode){
         
         if (dir_inode->i_block[12] >= 1) {
             struct ext2_inode *indirect_dir_inode = inode_table + dir_inode->i_block[12];
+            inode_num_file_name = search_dir_direct_blks(file_name, indirect_dir_inode);
         }
     }
+
+    return inode_num_file_name;
 }
 
 /* Given a path as a string, return the inode number of the 
  * last file in the path. -1 if path invalid.
  */
-unsigned int get_inode_num(char *path, unsigned int relative_path_inode){
+unsigned int get_inode_num(char *path, unsigned int relative_path_inode_num){
 	
     // Assume path begins with a slash
     char *trimmed_root = path + 1;
@@ -77,13 +84,15 @@ unsigned int get_inode_num(char *path, unsigned int relative_path_inode){
 	char dir_str[DIR_STR_LEN];
     unsigned int next_inode;
     int trimmed_len;
+    struct ext2_inode *relative_path_inode = 
+                                fetch_inode_from_num(relative_path_inode_num);
 
     if ((trimmed_len = strlen(trimmed_root)) == 0){
-        return relative_path_inode;
+        return relative_path_inode_num;
     }
 
 	if ((end_ptr = strchr(trimmed_root, '/')) != NULL){
-	   strncpy(dir_str, trimmed_root, end_ptr - trimmed_root);
+	    strncpy(dir_str, trimmed_root, end_ptr - trimmed_root);
 	} else {
         strncpy(dir_str, trimmed_root, DIR_STR_LEN);
         end_ptr = dir_str + trimmed_len - 1;
