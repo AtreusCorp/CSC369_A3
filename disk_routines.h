@@ -20,5 +20,6 @@ extern unsigned char *disk;
 extern struct ext2_inode *fetch_inode_from_num(unsigned int);
 extern unsigned int search_dir(char *, struct ext2_inode *);
 extern unsigned int get_inode_num(char *, unsigned int);
+extern unsigned int allocate_inode();
 
 #endif

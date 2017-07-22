@@ -105,3 +105,27 @@ unsigned int get_inode_num(char *path, unsigned int relative_path_inode_num){
     return get_inode_num(end_ptr, next_inode);
 
 }
+
+/* Allocate a free inode for use. 
+ * Returns the number of a cleared inode, -1 if none found.
+ */
+unsigned int allocate_inode(){
+    int i = 0;
+    struct ext2_super_block *super_block = (struct ext2_super_block *) (disk + EXT2_BLOCK_SIZE);
+    struct ext2_group_desc *group_desc = (struct ext2_group_desc *)
+                                            (disk + 2 * EXT2_BLOCK_SIZE);
+    struct ext2_inode *inode_table = (struct ext2_inode *)(disk + group_desc->bg_inode_table 
+                                                                  * EXT2_BLOCK_SIZE);
+    unsigned int inode_bitmap = group_desc->bg_inode_bitmap;
+    unsigned int inode_count = super_block->s_inodes_count;
+
+    while(i < inode_count){
+        if(pow(2, i) | inode_bitmap){
+
+            // inodes are indexed starting from 1
+            ++i;
+            memset(((char *)(inode_table + i)), 0, sizeof(ext2_inode));
+            return i;
+        }
+    }
+}
