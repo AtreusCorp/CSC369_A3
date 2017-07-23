@@ -112,21 +112,23 @@ int get_inode_num(char *path, unsigned int relative_path_inode_num){
  * Returns the number of a cleared inode, -1 if none found.
  */
 int allocate_inode(){
-    int i = EXT2_GOOD_OLD_FIRST_INO - 1;
-    int j = 10; // Deal with this
+    
     int found_inode = -1;
     struct ext2_super_block *super_block = (struct ext2_super_block *) (disk + EXT2_BLOCK_SIZE);
     struct ext2_group_desc *group_desc = (struct ext2_group_desc *)
                                             (disk + 2 * EXT2_BLOCK_SIZE);
     struct ext2_inode *inode_table = (struct ext2_inode *)(disk + group_desc->bg_inode_table 
                                                                   * EXT2_BLOCK_SIZE);
-    unsigned int inode_bitmap = group_desc->bg_inode_bitmap;
-    unsigned int block_bitmap = group_desc->bg_block_bitmap;
+    unsigned char *inode_bitmap = disk + group_desc->bg_inode_bitmap * EXT2_BLOCK_SIZE;
+    unsigned char *block_bitmap = disk + group_desc->bg_block_bitmap * EXT2_BLOCK_SIZE;
     unsigned int inode_count = super_block->s_inodes_count;
     unsigned int block_count = super_block->s_blocks_count;
+    int i = super_block->s_first_ino;
+    int j = super_block->s_first_data_block;
 
+    // Error here, use code from readimage
     while(i < inode_count && found_inode < 0){
-        if(( (1 << i) & inode_bitmap) == 0){
+        if( (unsigned int)*(inode_bitmap + i) == 0){
 
             memset(((char *)(inode_table + i)), 0, sizeof(struct ext2_inode));
 
@@ -140,13 +142,20 @@ int allocate_inode(){
 
         // Allocate a free block and link it to the found inode
         while(j < block_count){
-            if(((1 << j) & block_bitmap) == 0){
+            if((unsigned int)*(inode_bitmap + j) == 0){
 
                 memset((char *)(disk + j * EXT2_BLOCK_SIZE), 0, EXT2_BLOCK_SIZE);
                 (inode_table + found_inode - 1)->i_block[0] = j;
 
-                group_desc->bg_inode_bitmap |= (1 << (found_inode - 1));
-                group_desc->bg_block_bitmap |= (1 <<  j);
+                *(inode_bitmap + (found_inode - 1)) = 1;
+                *(block_bitmap + j) = 1;
+
+                group_desc->bg_free_blocks_count += 1;
+                super_block->s_free_blocks_count += 1;
+
+                group_desc->bg_free_inodes_count += 1;
+                super_block->s_free_inodes_count += 1;
+                group_desc->bg_used_dirs_count += 1;
 
                 return found_inode;
             }
@@ -237,6 +246,8 @@ unsigned int insert_cur_and_parent_dir(unsigned int p_inode_num,
             return -1;
         }
 
+        fetch_inode_from_num(cur_inode->i_block[12])->i_mode |= EXT2_S_IFDIR;
+
         if (allocate_dir_entry_slot(
                 fetch_inode_from_num(cur_inode->i_block[12]), new_entry) == NULL){
             printf("Error: dir entry allocation failed.\n");
@@ -258,6 +269,8 @@ unsigned int insert_cur_and_parent_dir(unsigned int p_inode_num,
             return -1;
         }
 
+        fetch_inode_from_num(cur_inode->i_block[12])->i_mode |= EXT2_S_IFDIR;
+
         if (allocate_dir_entry_slot(
                 fetch_inode_from_num(cur_inode->i_block[12]), new_entry) == NULL){
             printf("Error: dir entry allocation failed.\n");
@@ -276,24 +289,29 @@ unsigned int insert_cur_and_parent_dir(unsigned int p_inode_num,
  */
 int insert_dir_entry(struct ext2_inode *p_inode, 
                               unsigned int parent_dir_inode_num,
-                              unsigned int e_inode_num,
+                              int e_inode_num,
                               unsigned char name_len,
                               unsigned char file_type,
                               char *name){
-    int allocated_inode;
+    struct ext2_inode *allocated_inode;
     struct ext2_dir_entry_2 *new_entry = malloc(sizeof(struct ext2_dir_entry_2) + sizeof(char) * name_len);
     new_entry->file_type = file_type;
     new_entry->name_len = name_len;
     strncpy(new_entry->name, name, name_len);
 
     if (e_inode_num == 0){
-        if((allocated_inode = allocate_inode()) < 0){
+        if((e_inode_num = allocate_inode()) < 0){
             printf("Error: inode allocation failed.\n");
             return -1;
         }
-        new_entry->inode = allocated_inode;
-        fetch_inode_from_num(allocated_inode)->i_mode |= EXT2_S_IFDIR;
+        new_entry->inode = e_inode_num;
+
     }
+
+    // Make this more modular
+    allocated_inode = fetch_inode_from_num(e_inode_num);
+    allocated_inode->i_mode |= EXT2_S_IFDIR;
+    allocated_inode->i_links_count = 1;
 
     if(allocate_dir_entry_slot(p_inode, new_entry) == NULL){
 
@@ -304,6 +322,8 @@ int insert_dir_entry(struct ext2_inode *p_inode,
             return -1;
         }
 
+        fetch_inode_from_num(p_inode->i_block[12])->i_mode |= EXT2_S_IFDIR;
+
         if (allocate_dir_entry_slot(
                 fetch_inode_from_num(p_inode->i_block[12]), new_entry) == NULL){
             printf("Error: dir entry allocation failed.\n");
@@ -311,7 +331,7 @@ int insert_dir_entry(struct ext2_inode *p_inode,
             return -1;
         }
     }
-    insert_cur_and_parent_dir(parent_dir_inode_num, fetch_inode_from_num(allocated_inode), allocated_inode);
+    insert_cur_and_parent_dir(parent_dir_inode_num, allocated_inode, e_inode_num);
     free(new_entry);
     return 0;
 }

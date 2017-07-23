@@ -21,7 +21,7 @@ extern int get_inode_num(char *, unsigned int);
 extern int allocate_inode();
 extern int insert_dir_entry(struct ext2_inode *, 
 							unsigned int, 
-                          	unsigned int,
+                          	int,
                             unsigned char,
                             unsigned char,
                             char *);
