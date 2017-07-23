@@ -25,6 +25,14 @@ int main(int argc, char **argv){
 
     // Refers to the target directory prefixed by '/'
     parent_dir_end = strrchr(argv[2], '/');
+
+    // If the target directory had a slash at the end, handle accordingly
+    if (strlen(parent_dir_end + 1) == 0){
+        *parent_dir_end = '\0';
+        parent_dir_end = strrchr(argv[2], '/');
+    }
+
+    // Extract the target and parent directory names
     strncpy(target_dir, parent_dir_end + 1, EXT2_NAME_LEN);
     *(parent_dir_end + 1) = '\0';
     strncpy(parent_dir, argv[2], EXT2_NAME_LEN);
@@ -33,8 +41,8 @@ int main(int argc, char **argv){
     	printf("Error: %s does not exist.\n", parent_dir);
     	return ENOENT;
     }
-
     parent_dir_inode = fetch_inode_from_num(parent_dir_inode_num);
+    
     if (insert_dir_entry(parent_dir_inode, parent_dir_inode_num, 0, strlen(target_dir), EXT2_FT_DIR, target_dir) < 0){
     	exit(1);
     }

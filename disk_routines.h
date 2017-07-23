@@ -19,6 +19,8 @@ extern struct ext2_inode *fetch_inode_from_num(unsigned int);
 extern int search_dir(char *, struct ext2_inode *);
 extern int get_inode_num(char *, unsigned int);
 extern int allocate_inode();
+extern int check_inode_bitmap(int);
+extern int check_block_bitmap(int);
 extern int insert_dir_entry(struct ext2_inode *, 
 							unsigned int, 
                           	int,

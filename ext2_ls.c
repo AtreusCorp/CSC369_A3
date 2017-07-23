@@ -84,7 +84,7 @@ int main(int argc, char **argv){
 		// First level of inode indirection
 		indirect_dir_inode_num = dir_inode->i_block[12];
 
-		if (indirect_dir_inode_num >= 1 && ((1 << indirect_dir_inode_num) & group_desc->bg_inode_bitmap)){
+		if (indirect_dir_inode_num >= 1 && check_inode_bitmap(indirect_dir_inode_num)){
 			print_entries(fetch_inode_from_num(indirect_dir_inode_num), a_flag);
 		}
 

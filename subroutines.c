@@ -108,6 +108,58 @@ int get_inode_num(char *path, unsigned int relative_path_inode_num){
 
 }
 
+/* Returns 1 if the inode with inode_num is in use, 0 otherwise.
+ */
+int check_inode_bitmap(int inode_num){
+    struct ext2_group_desc *group_desc = (struct ext2_group_desc *)
+                                            (disk + 2 * EXT2_BLOCK_SIZE);
+    unsigned char *inode_bitmap = disk + group_desc->bg_inode_bitmap * EXT2_BLOCK_SIZE;
+
+    int inode_index = inode_num - 1;
+    int byte_index = inode_index / 8;
+    int bit_in_byte = inode_index % 8;
+    return (1 << bit_in_byte) & (*(inode_bitmap + byte_index));
+}
+
+/* Sets the inode bitmap to 1 for the inode corresponding to inode_num
+ */
+void set_inode_bitmap(int inode_num){
+    struct ext2_group_desc *group_desc = (struct ext2_group_desc *)
+                                            (disk + 2 * EXT2_BLOCK_SIZE);
+    unsigned char *inode_bitmap = disk + group_desc->bg_inode_bitmap * EXT2_BLOCK_SIZE;
+
+    int inode_index = inode_num - 1;
+    int byte_index = inode_index / 8;
+    int bit_in_byte = inode_index % 8;
+    *(inode_bitmap + byte_index) |= (1 << bit_in_byte);
+    return;
+}
+
+/* Returns 1 if the block with block_num is in use, 0 otherwise.
+ */
+int check_block_bitmap(int block_num){
+    struct ext2_group_desc *group_desc = (struct ext2_group_desc *)
+                                            (disk + 2 * EXT2_BLOCK_SIZE);
+    unsigned char *block_bitmap = disk + group_desc->bg_block_bitmap * EXT2_BLOCK_SIZE;
+
+    int byte_index = block_num / 8;
+    int bit_in_byte = block_num % 8;
+    return (1 << bit_in_byte) & (*(block_bitmap + byte_index));
+}
+
+/* Returns 1 if the block with block_num is in use, 0 otherwise.
+ */
+void set_block_bitmap(int block_num){
+    struct ext2_group_desc *group_desc = (struct ext2_group_desc *)
+                                            (disk + 2 * EXT2_BLOCK_SIZE);
+    unsigned char *block_bitmap = disk + group_desc->bg_block_bitmap * EXT2_BLOCK_SIZE;
+
+    int byte_index = block_num / 8;
+    int bit_in_byte = block_num % 8;
+    *(block_bitmap + byte_index) |= (1 << bit_in_byte);
+    return;
+}
+
 /* Allocate a free inode for use along with an empty block. 
  * Returns the number of a cleared inode, -1 if none found.
  */
@@ -128,31 +180,28 @@ int allocate_inode(){
 
     // Error here, use code from readimage
     while(i < inode_count && found_inode < 0){
-        if( (unsigned int)*(inode_bitmap + i) == 0){
-
-            memset(((char *)(inode_table + i)), 0, sizeof(struct ext2_inode));
+        if(!check_inode_bitmap(i)){
 
             // inodes are indexed starting from 1
-            found_inode = i + 1;
-        } else {
-            ++i;
+            memset(((char *)(inode_table + i - 1)), 0, sizeof(struct ext2_inode));
+            found_inode = i;
         }
+        ++i;
     }
     if (found_inode > -1){
 
         // Allocate a free block and link it to the found inode
         while(j < block_count){
-            if((unsigned int)*(inode_bitmap + j) == 0){
+            if(!check_block_bitmap(j)){
 
                 memset((char *)(disk + j * EXT2_BLOCK_SIZE), 0, EXT2_BLOCK_SIZE);
                 (inode_table + found_inode - 1)->i_block[0] = j;
 
-                *(inode_bitmap + (found_inode - 1)) = 1;
-                *(block_bitmap + j) = 1;
-
+                // Prepare the inode for use
+                set_inode_bitmap(found_inode);
+                set_block_bitmap(j);
                 group_desc->bg_free_blocks_count += 1;
                 super_block->s_free_blocks_count += 1;
-
                 group_desc->bg_free_inodes_count += 1;
                 super_block->s_free_inodes_count += 1;
                 group_desc->bg_used_dirs_count += 1;
@@ -178,10 +227,12 @@ unsigned char *allocate_dir_entry_slot(struct ext2_inode *p_inode,
     unsigned char *first_entry;
     unsigned char *cur_entry;
 
+    // Itterate through the direct 12 data blocks
     for(i = 0; i < 12; ++i){
         first_entry = disk + p_inode->i_block[i] * EXT2_BLOCK_SIZE;
         cur_entry = first_entry;
 
+        // Itterate through the ith block
         do {
             unsigned int new_rec_len;
             struct ext2_dir_entry_2 *cur_dir_entry = ((struct ext2_dir_entry_2 *) cur_entry);
@@ -191,8 +242,8 @@ unsigned char *allocate_dir_entry_slot(struct ext2_inode *p_inode,
             // 4 byte allignment
             unallocated_gap_size_alligned = unallocated_gap_size - (unallocated_gap_size % 4);
 
+            // If the new entry can fit
             if(unallocated_gap_size_alligned >= dir_size){
-
                 unsigned char *allignment_ptr = (unsigned char *) cur_dir_entry;
                 new_rec_len = cur_dir_entry->rec_len;
 
@@ -200,17 +251,18 @@ unsigned char *allocate_dir_entry_slot(struct ext2_inode *p_inode,
                     allignment_ptr += 4;
                     new_rec_len -= 4;
                 }
-
                 dir_entry->rec_len = new_rec_len;
                 cur_dir_entry->rec_len = allignment_ptr - cur_entry;
 
+                // Write the new entry into the data block
                 ((struct ext2_dir_entry_2 *) allignment_ptr)->inode = dir_entry->inode;
                 ((struct ext2_dir_entry_2 *) allignment_ptr)->rec_len = dir_entry->rec_len;
                 ((struct ext2_dir_entry_2 *) allignment_ptr)->name_len = dir_entry->name_len;
                 ((struct ext2_dir_entry_2 *) allignment_ptr)->file_type = dir_entry->file_type;
                 strncpy(((struct ext2_dir_entry_2 *) allignment_ptr)->name, dir_entry->name, dir_entry->name_len);
-
                 return allignment_ptr;
+
+            // The case where the block is entirely empty
             } else if (cur_dir_entry->rec_len == 0){
                 dir_entry->rec_len = EXT2_BLOCK_SIZE;
                 cur_dir_entry->inode = dir_entry->inode;
@@ -218,10 +270,11 @@ unsigned char *allocate_dir_entry_slot(struct ext2_inode *p_inode,
                 cur_dir_entry->name_len = dir_entry->name_len;
                 cur_dir_entry->file_type = dir_entry->file_type;
                 strncpy(cur_dir_entry->name, dir_entry->name, dir_entry->name_len);
-
                 return cur_entry;
             }
             cur_entry += ((struct ext2_dir_entry_2 *) cur_entry)->rec_len;
+
+        // While the whole block has not been covered
         } while ((cur_entry - first_entry) % EXT2_BLOCK_SIZE != 0);
     }
     return NULL;
@@ -237,6 +290,7 @@ unsigned int insert_cur_and_parent_dir(unsigned int p_inode_num,
     new_entry->inode = cur_inode_num;
     strncpy(new_entry->name, ".", 1);
 
+    // If necessary, place entry into indirect block
     if(allocate_dir_entry_slot(cur_inode, new_entry) == NULL){
 
         if(cur_inode->i_block[12] < 1
@@ -245,7 +299,6 @@ unsigned int insert_cur_and_parent_dir(unsigned int p_inode_num,
             free(new_entry);
             return -1;
         }
-
         fetch_inode_from_num(cur_inode->i_block[12])->i_mode |= EXT2_S_IFDIR;
 
         if (allocate_dir_entry_slot(
@@ -255,7 +308,6 @@ unsigned int insert_cur_and_parent_dir(unsigned int p_inode_num,
             return -1;
         }
     }
-
     new_entry->name_len = 2;
     new_entry->inode = p_inode_num;
     strncpy(new_entry->name, "..", 2);
@@ -268,7 +320,6 @@ unsigned int insert_cur_and_parent_dir(unsigned int p_inode_num,
             free(new_entry);
             return -1;
         }
-
         fetch_inode_from_num(cur_inode->i_block[12])->i_mode |= EXT2_S_IFDIR;
 
         if (allocate_dir_entry_slot(
@@ -299,6 +350,7 @@ int insert_dir_entry(struct ext2_inode *p_inode,
     new_entry->name_len = name_len;
     strncpy(new_entry->name, name, name_len);
 
+    // Allocated a new inode
     if (e_inode_num == 0){
         if((e_inode_num = allocate_inode()) < 0){
             printf("Error: inode allocation failed.\n");
@@ -308,11 +360,13 @@ int insert_dir_entry(struct ext2_inode *p_inode,
 
     }
 
-    // Make this more modular
+    // TODO: Make this more modular
     allocated_inode = fetch_inode_from_num(e_inode_num);
     allocated_inode->i_mode |= EXT2_S_IFDIR;
     allocated_inode->i_links_count = 1;
+    allocated_inode->i_blocks += 2;
 
+    // If necessary, place entry into indirect block
     if(allocate_dir_entry_slot(p_inode, new_entry) == NULL){
 
         if(p_inode->i_block[12] < 1
@@ -321,7 +375,6 @@ int insert_dir_entry(struct ext2_inode *p_inode,
             free(new_entry);
             return -1;
         }
-
         fetch_inode_from_num(p_inode->i_block[12])->i_mode |= EXT2_S_IFDIR;
 
         if (allocate_dir_entry_slot(
