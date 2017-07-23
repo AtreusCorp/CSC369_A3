@@ -8,8 +8,6 @@ void print_entries(struct ext2_inode *dir_inode, int a_flag){
     unsigned char *cur_entry;
     char *cur_dir = ".";
     char *parent_dir = "..";
-    struct ext2_group_desc *group_desc = (struct ext2_group_desc *)
-                                            	(disk + 2 * EXT2_BLOCK_SIZE);
 
 	for(i = 0; i < 12; ++i){
         if ((dir_inode->i_block[i]) > 0){
@@ -51,17 +49,12 @@ int main(int argc, char **argv){
 	struct ext2_inode *dir_inode;
 	unsigned int dir_inode_num;
 	unsigned int indirect_dir_inode_num;
-	struct ext2_group_desc *group_desc;
-
 	int fd = open(argv[1], O_RDWR);
 
     if((disk = mmap(NULL, 128 * 1024, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0)) == MAP_FAILED){
     	perror("Error");
     	exit(1);
     }
-
-    // Skip two blocks ahead to pass boot and super blocks
-    group_desc = (struct ext2_group_desc *) (disk + 2 * EXT2_BLOCK_SIZE);
 
     // Check for the "all" flag
 	if (strncmp(argv[2], "-a", 2) == 0){

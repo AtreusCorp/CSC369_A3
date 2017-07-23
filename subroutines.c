@@ -15,8 +15,6 @@ int search_dir_direct_blks(char * file_name, struct ext2_inode *dir_inode) {
     int i;
     unsigned char *first_entry;
     unsigned char *cur_entry;
-    struct ext2_group_desc *group_desc = (struct ext2_group_desc *)
-                                            (disk + 2 * EXT2_BLOCK_SIZE);
 
     if (S_ISDIR(dir_inode->i_mode) != 1){
         return -1;
@@ -63,13 +61,11 @@ int search_dir(char *file_name, struct ext2_inode *dir_inode){
 
         // Search remaining the indirect blocks
         // TODO: Ask: can we still assume 1 is the bad inode?
-        
         if (dir_inode->i_block[12] >= 1) {
             struct ext2_inode *indirect_dir_inode = inode_table + dir_inode->i_block[12];
             inode_num_file_name = search_dir_direct_blks(file_name, indirect_dir_inode);
         }
     }
-
     return inode_num_file_name;
 }
 
@@ -171,8 +167,6 @@ int allocate_inode(){
                                             (disk + 2 * EXT2_BLOCK_SIZE);
     struct ext2_inode *inode_table = (struct ext2_inode *)(disk + group_desc->bg_inode_table 
                                                                   * EXT2_BLOCK_SIZE);
-    unsigned char *inode_bitmap = disk + group_desc->bg_inode_bitmap * EXT2_BLOCK_SIZE;
-    unsigned char *block_bitmap = disk + group_desc->bg_block_bitmap * EXT2_BLOCK_SIZE;
     unsigned int inode_count = super_block->s_inodes_count;
     unsigned int block_count = super_block->s_blocks_count;
     int i = super_block->s_first_ino;
@@ -222,8 +216,6 @@ unsigned char *allocate_dir_entry_slot(struct ext2_inode *p_inode,
     int cur_dir_entry_size;
     int unallocated_gap_size;
     int unallocated_gap_size_alligned;
-    struct ext2_group_desc *group_desc = (struct ext2_group_desc *)
-                                            (disk + 2 * EXT2_BLOCK_SIZE);
     unsigned char *first_entry;
     unsigned char *cur_entry;
 
@@ -283,9 +275,9 @@ unsigned char *allocate_dir_entry_slot(struct ext2_inode *p_inode,
 unsigned int insert_cur_and_parent_dir(unsigned int p_inode_num, 
                                        struct ext2_inode *cur_inode,
                                        unsigned int cur_inode_num){
-    struct ext2_dir_entry_2 *new_entry = malloc(sizeof(struct ext2_dir_entry_2) 
+    struct ext2_dir_entry_2 *new_entry = calloc(1, sizeof(struct ext2_dir_entry_2) 
                                                 + sizeof(char) * 2);
-    new_entry->file_type = EXT2_S_IFDIR;
+    new_entry->file_type |= EXT2_S_IFDIR;
     new_entry->name_len = 1;
     new_entry->inode = cur_inode_num;
     strncpy(new_entry->name, ".", 1);
