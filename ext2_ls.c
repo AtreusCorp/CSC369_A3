@@ -12,7 +12,7 @@ void print_entries(struct ext2_inode *dir_inode, int a_flag){
                                             	(disk + 2 * EXT2_BLOCK_SIZE);
 
 	for(i = 0; i < 12; ++i){
-        if (((unsigned int) pow(2, dir_inode->i_block[i])) | group_desc->bg_block_bitmap){
+        if ((dir_inode->i_block[i]) > 0){
 
             // Keep track of beginning to ensure block overflow doesn't occur
             first_entry = disk + dir_inode->i_block[i] * EXT2_BLOCK_SIZE;
@@ -51,7 +51,6 @@ int main(int argc, char **argv){
 	struct ext2_inode *dir_inode;
 	unsigned int dir_inode_num;
 	unsigned int indirect_dir_inode_num;
-	unsigned int indirect_num_one_hot;
 	struct ext2_group_desc *group_desc;
 
 	int fd = open(argv[1], O_RDWR);
@@ -85,9 +84,7 @@ int main(int argc, char **argv){
 		// First level of inode indirection
 		indirect_dir_inode_num = dir_inode->i_block[12];
 
-		// For use in bitmap check
-		indirect_num_one_hot = pow(2, indirect_dir_inode_num);
-		if (indirect_dir_inode_num >= 1 && indirect_num_one_hot | group_desc->bg_inode_bitmap){
+		if (indirect_dir_inode_num >= 1 && ((1 << indirect_dir_inode_num) & group_desc->bg_inode_bitmap)){
 			print_entries(fetch_inode_from_num(indirect_dir_inode_num), a_flag);
 		}
 

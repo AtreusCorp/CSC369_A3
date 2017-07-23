@@ -23,7 +23,7 @@ int search_dir_direct_blks(char * file_name, struct ext2_inode *dir_inode) {
     }
 
     for(i = 0; i < 12; ++i){
-        if (((unsigned int) pow(2, dir_inode->i_block[i])) | group_desc->bg_block_bitmap){
+        if (dir_inode->i_block[i] > 0){
             first_entry = disk + dir_inode->i_block[i] * EXT2_BLOCK_SIZE;
             cur_entry = first_entry;
 
@@ -53,8 +53,8 @@ int search_dir_direct_blks(char * file_name, struct ext2_inode *dir_inode) {
  * Returns the inode number of the file found, -1 if the file was not found or 
  * dir_inode is not a directory.
  */
-unsigned int search_dir(char *file_name, struct ext2_inode *dir_inode){
-    unsigned int inode_num_file_name;
+int search_dir(char *file_name, struct ext2_inode *dir_inode){
+    int inode_num_file_name;
     struct ext2_group_desc *group_desc = (struct ext2_group_desc *)
                                             (disk + 2 * EXT2_BLOCK_SIZE);
     struct ext2_inode *inode_table = (struct ext2_inode *)(disk + group_desc->bg_inode_table 
@@ -76,13 +76,13 @@ unsigned int search_dir(char *file_name, struct ext2_inode *dir_inode){
 /* Given a path as a string, return the inode number of the 
  * last file in the path. -1 if path invalid.
  */
-unsigned int get_inode_num(char *path, unsigned int relative_path_inode_num){
+int get_inode_num(char *path, unsigned int relative_path_inode_num){
 	
     // Assume path begins with a slash
     char *trimmed_root = path + 1;
     char *end_ptr;
-	char dir_str[DIR_STR_LEN];
-    unsigned int next_inode;
+	char dir_str[EXT2_NAME_LEN];
+    int next_inode;
     int trimmed_len;
     struct ext2_inode *relative_path_inode = 
                                 fetch_inode_from_num(relative_path_inode_num);
@@ -92,10 +92,12 @@ unsigned int get_inode_num(char *path, unsigned int relative_path_inode_num){
     }
 
 	if ((end_ptr = strchr(trimmed_root, '/')) != NULL){
-	    strncpy(dir_str, trimmed_root, end_ptr - trimmed_root);
+	    strncpy(dir_str, trimmed_root, end_ptr - trimmed_root + 1);
+        dir_str[end_ptr - trimmed_root] = '\0';
 	} else {
-        strncpy(dir_str, trimmed_root, DIR_STR_LEN);
-        end_ptr = dir_str + trimmed_len - 1;
+        strncpy(dir_str, trimmed_root, EXT2_NAME_LEN);
+        dir_str[trimmed_len] = '\0';
+        end_ptr = dir_str + trimmed_len;
     }
 
     if ((next_inode = search_dir(dir_str, relative_path_inode)) == -1){
@@ -106,26 +108,210 @@ unsigned int get_inode_num(char *path, unsigned int relative_path_inode_num){
 
 }
 
-/* Allocate a free inode for use. 
+/* Allocate a free inode for use along with an empty block. 
  * Returns the number of a cleared inode, -1 if none found.
  */
-unsigned int allocate_inode(){
-    int i = 0;
+int allocate_inode(){
+    int i = EXT2_GOOD_OLD_FIRST_INO - 1;
+    int j = 10; // Deal with this
+    int found_inode = -1;
     struct ext2_super_block *super_block = (struct ext2_super_block *) (disk + EXT2_BLOCK_SIZE);
     struct ext2_group_desc *group_desc = (struct ext2_group_desc *)
                                             (disk + 2 * EXT2_BLOCK_SIZE);
     struct ext2_inode *inode_table = (struct ext2_inode *)(disk + group_desc->bg_inode_table 
                                                                   * EXT2_BLOCK_SIZE);
     unsigned int inode_bitmap = group_desc->bg_inode_bitmap;
+    unsigned int block_bitmap = group_desc->bg_block_bitmap;
     unsigned int inode_count = super_block->s_inodes_count;
+    unsigned int block_count = super_block->s_blocks_count;
 
-    while(i < inode_count){
-        if(pow(2, i) | inode_bitmap){
+    while(i < inode_count && found_inode < 0){
+        if(( (1 << i) & inode_bitmap) == 0){
+
+            memset(((char *)(inode_table + i)), 0, sizeof(struct ext2_inode));
 
             // inodes are indexed starting from 1
+            found_inode = i + 1;
+        } else {
             ++i;
-            memset(((char *)(inode_table + i)), 0, sizeof(ext2_inode));
-            return i;
         }
     }
+    if (found_inode > -1){
+
+        // Allocate a free block and link it to the found inode
+        while(j < block_count){
+            if(((1 << j) & block_bitmap) == 0){
+
+                memset((char *)(disk + j * EXT2_BLOCK_SIZE), 0, EXT2_BLOCK_SIZE);
+                (inode_table + found_inode - 1)->i_block[0] = j;
+
+                group_desc->bg_inode_bitmap |= (1 << (found_inode - 1));
+                group_desc->bg_block_bitmap |= (1 <<  j);
+
+                return found_inode;
+            }
+            ++j;
+        }
+    }
+
+    return -1;
+}
+
+unsigned char *allocate_dir_entry_slot(struct ext2_inode *p_inode, 
+                              struct ext2_dir_entry_2 *dir_entry){
+    int i;
+    int dir_size = sizeof(*dir_entry);
+    int cur_dir_entry_size;
+    int unallocated_gap_size;
+    int unallocated_gap_size_alligned;
+    struct ext2_group_desc *group_desc = (struct ext2_group_desc *)
+                                            (disk + 2 * EXT2_BLOCK_SIZE);
+    unsigned char *first_entry;
+    unsigned char *cur_entry;
+
+    for(i = 0; i < 12; ++i){
+        first_entry = disk + p_inode->i_block[i] * EXT2_BLOCK_SIZE;
+        cur_entry = first_entry;
+
+        do {
+            unsigned int new_rec_len;
+            struct ext2_dir_entry_2 *cur_dir_entry = ((struct ext2_dir_entry_2 *) cur_entry);
+            cur_dir_entry_size = sizeof(cur_dir_entry) + sizeof(char) * cur_dir_entry->name_len;
+            unallocated_gap_size = cur_dir_entry->rec_len - cur_dir_entry_size;
+
+            // 4 byte allignment
+            unallocated_gap_size_alligned = unallocated_gap_size - (unallocated_gap_size % 4);
+
+            if(unallocated_gap_size_alligned >= dir_size){
+
+                unsigned char *allignment_ptr = (unsigned char *) cur_dir_entry;
+                new_rec_len = cur_dir_entry->rec_len;
+
+                while(((cur_entry + cur_dir_entry_size) - allignment_ptr) > 0){
+                    allignment_ptr += 4;
+                    new_rec_len -= 4;
+                }
+
+                dir_entry->rec_len = new_rec_len;
+                cur_dir_entry->rec_len = allignment_ptr - cur_entry;
+
+                ((struct ext2_dir_entry_2 *) allignment_ptr)->inode = dir_entry->inode;
+                ((struct ext2_dir_entry_2 *) allignment_ptr)->rec_len = dir_entry->rec_len;
+                ((struct ext2_dir_entry_2 *) allignment_ptr)->name_len = dir_entry->name_len;
+                ((struct ext2_dir_entry_2 *) allignment_ptr)->file_type = dir_entry->file_type;
+                strncpy(((struct ext2_dir_entry_2 *) allignment_ptr)->name, dir_entry->name, dir_entry->name_len);
+
+                return allignment_ptr;
+            } else if (cur_dir_entry->rec_len == 0){
+                dir_entry->rec_len = EXT2_BLOCK_SIZE;
+                cur_dir_entry->inode = dir_entry->inode;
+                cur_dir_entry->rec_len = dir_entry->rec_len;
+                cur_dir_entry->name_len = dir_entry->name_len;
+                cur_dir_entry->file_type = dir_entry->file_type;
+                strncpy(cur_dir_entry->name, dir_entry->name, dir_entry->name_len);
+
+                return cur_entry;
+            }
+            cur_entry += ((struct ext2_dir_entry_2 *) cur_entry)->rec_len;
+        } while ((cur_entry - first_entry) % EXT2_BLOCK_SIZE != 0);
+    }
+    return NULL;
+}
+
+unsigned int insert_cur_and_parent_dir(unsigned int p_inode_num, 
+                                       struct ext2_inode *cur_inode,
+                                       unsigned int cur_inode_num){
+    struct ext2_dir_entry_2 *new_entry = malloc(sizeof(struct ext2_dir_entry_2) 
+                                                + sizeof(char) * 2);
+    new_entry->file_type = EXT2_S_IFDIR;
+    new_entry->name_len = 1;
+    new_entry->inode = cur_inode_num;
+    strncpy(new_entry->name, ".", 1);
+
+    if(allocate_dir_entry_slot(cur_inode, new_entry) == NULL){
+
+        if(cur_inode->i_block[12] < 1
+            && (cur_inode->i_block[12] = allocate_inode()) < 0){
+            printf("Error: inode allocation failed.\n");
+            free(new_entry);
+            return -1;
+        }
+
+        if (allocate_dir_entry_slot(
+                fetch_inode_from_num(cur_inode->i_block[12]), new_entry) == NULL){
+            printf("Error: dir entry allocation failed.\n");
+            free(new_entry);
+            return -1;
+        }
+    }
+
+    new_entry->name_len = 2;
+    new_entry->inode = p_inode_num;
+    strncpy(new_entry->name, "..", 2);
+
+    if(allocate_dir_entry_slot(cur_inode, new_entry) == NULL){
+
+        if(cur_inode->i_block[12] < 1
+            && (cur_inode->i_block[12] = allocate_inode()) < 0){
+            printf("Error: inode allocation failed.\n");
+            free(new_entry);
+            return -1;
+        }
+
+        if (allocate_dir_entry_slot(
+                fetch_inode_from_num(cur_inode->i_block[12]), new_entry) == NULL){
+            printf("Error: dir entry allocation failed.\n");
+            free(new_entry);
+            return -1;
+        }
+    }
+    free(new_entry);
+    return 0;
+}
+
+/* Insert an ext2_dir_entry_2 into p_inode and equip it with provided e_inode_num,
+ * name_len, file_type, and name. If e_inode_num = 0, allocates a free inode and
+ * equips the entry with that. Automatically computes rec_len. Returns 0 on success, 
+ * -1 otherwise.
+ */
+int insert_dir_entry(struct ext2_inode *p_inode, 
+                              unsigned int parent_dir_inode_num,
+                              unsigned int e_inode_num,
+                              unsigned char name_len,
+                              unsigned char file_type,
+                              char *name){
+    int allocated_inode;
+    struct ext2_dir_entry_2 *new_entry = malloc(sizeof(struct ext2_dir_entry_2) + sizeof(char) * name_len);
+    new_entry->file_type = file_type;
+    new_entry->name_len = name_len;
+    strncpy(new_entry->name, name, name_len);
+
+    if (e_inode_num == 0){
+        if((allocated_inode = allocate_inode()) < 0){
+            printf("Error: inode allocation failed.\n");
+            return -1;
+        }
+        new_entry->inode = allocated_inode;
+        fetch_inode_from_num(allocated_inode)->i_mode |= EXT2_S_IFDIR;
+    }
+
+    if(allocate_dir_entry_slot(p_inode, new_entry) == NULL){
+
+        if(p_inode->i_block[12] < 1
+            && (p_inode->i_block[12] = allocate_inode()) < 0){
+            printf("Error: inode allocation failed.\n");
+            free(new_entry);
+            return -1;
+        }
+
+        if (allocate_dir_entry_slot(
+                fetch_inode_from_num(p_inode->i_block[12]), new_entry) == NULL){
+            printf("Error: dir entry allocation failed.\n");
+            free(new_entry);
+            return -1;
+        }
+    }
+    insert_cur_and_parent_dir(parent_dir_inode_num, fetch_inode_from_num(allocated_inode), allocated_inode);
+    free(new_entry);
+    return 0;
 }

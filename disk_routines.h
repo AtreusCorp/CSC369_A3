@@ -12,14 +12,18 @@
 #ifndef ROUTINES
 #define ROUTINES
 
-#define DIR_STR_LEN 255
-
 
 extern unsigned char *disk;
 
 extern struct ext2_inode *fetch_inode_from_num(unsigned int);
-extern unsigned int search_dir(char *, struct ext2_inode *);
-extern unsigned int get_inode_num(char *, unsigned int);
-extern unsigned int allocate_inode();
+extern int search_dir(char *, struct ext2_inode *);
+extern int get_inode_num(char *, unsigned int);
+extern int allocate_inode();
+extern int insert_dir_entry(struct ext2_inode *, 
+							unsigned int, 
+                          	unsigned int,
+                            unsigned char,
+                            unsigned char,
+                            char *);
 
 #endif
