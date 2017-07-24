@@ -352,7 +352,6 @@ int insert_dir_entry(struct ext2_inode *p_inode,
 
     }
 
-    // TODO: Make this more modular
     allocated_inode = fetch_inode_from_num(e_inode_num);
     if (file_type == EXT2_FT_REG_FILE){
         allocated_inode->i_mode |= EXT2_S_IFREG;
@@ -362,7 +361,7 @@ int insert_dir_entry(struct ext2_inode *p_inode,
 
     } else if (file_type == EXT2_FT_SYMLINK){
         allocated_inode->i_mode |= EXT2_S_IFLNK;
-        
+
     } else {
         printf("Error: Could not handle file type.\n");
         free(new_entry);
