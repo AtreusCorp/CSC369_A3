@@ -156,6 +156,25 @@ void set_block_bitmap(int block_num){
     return;
 }
 
+/* Returns a free block number and sets it's corresponding bit map in 
+ * the block bitmap to 1. -1 if no block could be allocated;
+ */
+int allocate_block(){
+    struct ext2_super_block *super_block = (struct ext2_super_block *) (disk + EXT2_BLOCK_SIZE);
+    int j = super_block->s_first_data_block;
+    
+    while(j < super_block->s_blocks_count){
+        if(!check_block_bitmap(j)){
+
+            memset((char *)(disk + j * EXT2_BLOCK_SIZE), 0, EXT2_BLOCK_SIZE);
+            set_block_bitmap(j);
+            return j;
+        }
+        ++j;
+    }
+    return -1;
+}
+
 /* Allocate a free inode for use along with an empty block. 
  * Returns the number of a cleared inode, -1 if none found.
  */
@@ -168,9 +187,8 @@ int allocate_inode(){
     struct ext2_inode *inode_table = (struct ext2_inode *)(disk + group_desc->bg_inode_table 
                                                                   * EXT2_BLOCK_SIZE);
     unsigned int inode_count = super_block->s_inodes_count;
-    unsigned int block_count = super_block->s_blocks_count;
     int i = super_block->s_first_ino;
-    int j = super_block->s_first_data_block;
+    int allocated_block;
 
     // Error here, use code from readimage
     while(i < inode_count && found_inode < 0){
@@ -183,27 +201,21 @@ int allocate_inode(){
         ++i;
     }
     if (found_inode > -1){
+        set_inode_bitmap(found_inode);
 
         // Allocate a free block and link it to the found inode
-        while(j < block_count){
-            if(!check_block_bitmap(j)){
-
-                memset((char *)(disk + j * EXT2_BLOCK_SIZE), 0, EXT2_BLOCK_SIZE);
-                (inode_table + found_inode - 1)->i_block[0] = j;
-
-                // Prepare the inode for use
-                set_inode_bitmap(found_inode);
-                set_block_bitmap(j);
-                group_desc->bg_free_blocks_count += 1;
-                super_block->s_free_blocks_count += 1;
-                group_desc->bg_free_inodes_count += 1;
-                super_block->s_free_inodes_count += 1;
-                group_desc->bg_used_dirs_count += 1;
-
-                return found_inode;
-            }
-            ++j;
+        if ((allocated_block = allocate_block()) < 0){
+            printf("Error: Block Allocation failed.\n");
+            return -1;
         }
+        (inode_table + found_inode - 1)->i_block[0] = allocated_block;
+        group_desc->bg_free_blocks_count += 1;
+        super_block->s_free_blocks_count += 1;
+        group_desc->bg_free_inodes_count += 1;
+        super_block->s_free_inodes_count += 1;
+        group_desc->bg_used_dirs_count += 1;
+        
+        return found_inode;
     }
 
     return -1;
@@ -213,6 +225,7 @@ unsigned char *allocate_dir_entry_slot(struct ext2_inode *p_inode,
                               struct ext2_dir_entry_2 *dir_entry){
     int i;
     int dir_size = sizeof(*dir_entry);
+    int cur_block;
     int cur_dir_entry_size;
     int unallocated_gap_size;
     int unallocated_gap_size_alligned;
@@ -221,6 +234,18 @@ unsigned char *allocate_dir_entry_slot(struct ext2_inode *p_inode,
 
     // Itterate through the direct 12 data blocks
     for(i = 0; i < 12; ++i){
+
+        if (!check_block_bitmap(p_inode->i_block[i])){
+            if ((cur_block = allocate_block()) < 0){
+                printf("Error: Block Allocation failed.\n");
+                return NULL;
+            }
+            p_inode->i_block[i] = cur_block;
+
+        }
+
+        // TODO: add an if statement checking to ensure 
+
         first_entry = disk + p_inode->i_block[i] * EXT2_BLOCK_SIZE;
         cur_entry = first_entry;
 
