@@ -81,7 +81,7 @@ int main(int argc, char **argv){
 			print_entries(fetch_inode_from_num(indirect_dir_inode_num), a_flag);
 		}
 
-	} else if (S_ISREG(dir_inode->i_mode)){
+	} else if (S_ISREG(dir_inode->i_mode) || S_ISLNK(dir_inode->i_mode)){
 		char *last_slash = strrchr(argv[path_index], '/');
 		last_slash += 1;
 		if (strlen(last_slash) == 0){
