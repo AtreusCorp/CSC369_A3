@@ -354,9 +354,24 @@ int insert_dir_entry(struct ext2_inode *p_inode,
 
     // TODO: Make this more modular
     allocated_inode = fetch_inode_from_num(e_inode_num);
-    allocated_inode->i_mode |= EXT2_S_IFDIR;
+    if (file_type == EXT2_FT_REG_FILE){
+        allocated_inode->i_mode |= EXT2_S_IFREG;
+
+    } else if (file_type == EXT2_FT_DIR){
+        allocated_inode->i_mode |= EXT2_S_IFDIR;
+
+    } else if (file_type == EXT2_FT_SYMLINK){
+        allocated_inode->i_mode |= EXT2_S_IFLNK;
+        
+    } else {
+        printf("Error: Could not handle file type.\n");
+        free(new_entry);
+        return -1;
+    }
     allocated_inode->i_links_count = 1;
     allocated_inode->i_blocks += 2;
+    allocated_inode->osd1 = p_inode->osd1;
+    allocated_inode->i_size = EXT2_BLOCK_SIZE;
 
     // If necessary, place entry into indirect block
     if(allocate_dir_entry_slot(p_inode, new_entry) == NULL){
