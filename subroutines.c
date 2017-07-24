@@ -376,7 +376,7 @@ int insert_dir_entry(struct ext2_inode *p_inode,
     if(allocate_dir_entry_slot(p_inode, new_entry) == NULL){
 
         if(p_inode->i_block[12] < 1){
-            if (p_inode->i_block[12] = allocate_inode()) < 0){
+            if ((p_inode->i_block[12] = allocate_inode()) < 0){
                 printf("Error: inode allocation failed.\n");
                 free(new_entry);
                 return -1;
