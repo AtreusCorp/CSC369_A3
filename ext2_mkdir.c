@@ -8,8 +8,8 @@ int main(int argc, char **argv){
 	unsigned int new_dir_inode_num;
 	int parent_dir_inode_num;
 	struct ext2_inode *parent_dir_inode;
-	char target_dir[EXT2_NAME_LEN];
-    char parent_dir[EXT2_NAME_LEN];
+	char target_dir[EXT2_NAME_LEN + 1];
+    char parent_dir[EXT2_NAME_LEN + 1];
 	char *parent_dir_end;
 	int fd = open(argv[1], O_RDWR);
 
@@ -33,6 +33,12 @@ int main(int argc, char **argv){
     }
 
     // Extract the target and parent directory names
+
+    if (strlen(parent_dir_end + 1) > EXT2_NAME_LEN){
+        printf("Error: Directory name too long.\n");
+        return ENAMETOOLONG;
+
+    }
     strncpy(target_dir, parent_dir_end + 1, EXT2_NAME_LEN);
     *(parent_dir_end + 1) = '\0';
     strncpy(parent_dir, argv[2], EXT2_NAME_LEN);

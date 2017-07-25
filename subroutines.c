@@ -224,7 +224,8 @@ int allocate_inode(){
 unsigned char *allocate_dir_entry_slot(struct ext2_inode *p_inode, 
                               struct ext2_dir_entry_2 *dir_entry){
     int i;
-    int dir_size = sizeof(*dir_entry);
+    int dir_size = sizeof(struct ext2_dir_entry_2) 
+                   + sizeof(char) * dir_entry->name_len;
     int cur_block;
     int cur_dir_entry_size;
     int unallocated_gap_size;
