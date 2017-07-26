@@ -190,6 +190,8 @@ void unset_block_bitmap(int block_num){
  */
 int allocate_block(){
     struct ext2_super_block *super_block = (struct ext2_super_block *) (disk + EXT2_BLOCK_SIZE);
+    struct ext2_group_desc *group_desc = (struct ext2_group_desc *)
+                                            (disk + 2 * EXT2_BLOCK_SIZE);
     int j = super_block->s_first_data_block;
     
     while(j < super_block->s_blocks_count){
@@ -197,6 +199,8 @@ int allocate_block(){
 
             memset((char *)(disk + j * EXT2_BLOCK_SIZE), 0, EXT2_BLOCK_SIZE);
             set_block_bitmap(j);
+            super_block->s_free_blocks_count -= 1;
+            group_desc->bg_free_blocks_count -= 1;
             return j;
         }
         ++j;
@@ -238,12 +242,12 @@ int allocate_inode(){
             return -1;
         }
         (inode_table + found_inode - 1)->i_block[0] = allocated_block;
-        group_desc->bg_free_blocks_count += 1;
-        super_block->s_free_blocks_count += 1;
-        group_desc->bg_free_inodes_count += 1;
-        super_block->s_free_inodes_count += 1;
-        group_desc->bg_used_dirs_count += 1;
-        
+        (inode_table + found_inode - 1)->i_blocks = 2;
+        (inode_table + found_inode - 1)->i_size = EXT2_BLOCK_SIZE;
+        (inode_table + found_inode - 1)->i_links_count = 1;
+        group_desc->bg_free_inodes_count -= 1;
+        super_block->s_free_inodes_count -= 1;
+                
         return found_inode;
     }
 
@@ -426,6 +430,7 @@ unsigned int insert_cur_and_parent_dir(unsigned int p_inode_num,
             free(new_entry);
             return -1;
         }
+        cur_inode->i_blocks += 2;
         fetch_inode_from_num(cur_inode->i_block[12])->i_mode |= EXT2_S_IFDIR;
 
         if (allocate_dir_entry_slot(
@@ -447,6 +452,7 @@ unsigned int insert_cur_and_parent_dir(unsigned int p_inode_num,
             free(new_entry);
             return -1;
         }
+        cur_inode->i_blocks += 2;
         fetch_inode_from_num(cur_inode->i_block[12])->i_mode |= EXT2_S_IFDIR;
 
         if (allocate_dir_entry_slot(
@@ -502,10 +508,6 @@ int insert_dir_entry(struct ext2_inode *p_inode,
         free(new_entry);
         return -1;
     }
-    allocated_inode->i_links_count = 1;
-    allocated_inode->i_blocks += 2;
-    allocated_inode->osd1 = p_inode->osd1;
-    allocated_inode->i_size = EXT2_BLOCK_SIZE;
 
     // If necessary, place entry into indirect block
     if(allocate_dir_entry_slot(p_inode, new_entry) == NULL){
@@ -516,6 +518,7 @@ int insert_dir_entry(struct ext2_inode *p_inode,
                 free(new_entry);
                 return -1;
             }
+            p_inode->i_blocks += 2;
             p_inode->i_size += EXT2_BLOCK_SIZE;
 
         }
