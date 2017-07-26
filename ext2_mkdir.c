@@ -5,7 +5,7 @@ unsigned char *disk;
 
 
 int main(int argc, char **argv){
-	unsigned int new_dir_inode_num;
+	int new_dir_inode_num;
 	int parent_dir_inode_num;
 	struct ext2_inode *parent_dir_inode;
 	char target_dir[EXT2_NAME_LEN + 1];

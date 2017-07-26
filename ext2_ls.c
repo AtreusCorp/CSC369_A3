@@ -47,8 +47,8 @@ int main(int argc, char **argv){
 	int a_flag = 0;
 	int path_index = 2;
 	struct ext2_inode *dir_inode;
-	unsigned int dir_inode_num;
-	unsigned int indirect_dir_inode_num;
+	int dir_inode_num;
+	int indirect_dir_inode_num;
 	int fd = open(argv[1], O_RDWR);
 
     if((disk = mmap(NULL, 128 * 1024, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0)) == MAP_FAILED){
@@ -77,7 +77,8 @@ int main(int argc, char **argv){
 		// First level of inode indirection
 		indirect_dir_inode_num = dir_inode->i_block[12];
 
-		if (indirect_dir_inode_num >= 1 && check_inode_bitmap(indirect_dir_inode_num)){
+		if (indirect_dir_inode_num >= EXT2_GOOD_OLD_FIRST_INO 
+			&& check_inode_bitmap(indirect_dir_inode_num)){
 			print_entries(fetch_inode_from_num(indirect_dir_inode_num), a_flag);
 		}
 
