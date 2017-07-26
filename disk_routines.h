@@ -20,12 +20,19 @@ extern int search_dir(char *, struct ext2_inode *);
 extern int get_inode_num(char *, unsigned int);
 extern int allocate_inode();
 extern int check_inode_bitmap(int);
+extern void set_inode_bitmap(int);
+extern void unset_inode_bitmap(int);
 extern int check_block_bitmap(int);
+extern void set_block_bitmap(int);
+extern void unset_block_bitmap(int);
 extern int insert_dir_entry(struct ext2_inode *, 
 							unsigned int, 
                           	int,
                             unsigned char,
                             unsigned char,
                             char *);
+extern int remove_dir_entry(struct ext2_inode *, 
+                     		char *,
+                     		unsigned int);
 
 #endif

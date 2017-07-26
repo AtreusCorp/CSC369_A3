@@ -61,9 +61,11 @@ int search_dir(char *file_name, struct ext2_inode *dir_inode){
 
         // Search remaining the indirect blocks
         // TODO: Ask: can we still assume 1 is the bad inode?
-        if (dir_inode->i_block[12] >= 1) {
+        if (dir_inode->i_block[12] >= EXT2_GOOD_OLD_FIRST_INO) {
             struct ext2_inode *indirect_dir_inode = inode_table + dir_inode->i_block[12];
-            inode_num_file_name = search_dir_direct_blks(file_name, indirect_dir_inode);
+            if ((inode_num_file_name = search_dir_direct_blks(file_name, indirect_dir_inode)) == -1){
+                return -1;
+            }
         }
     }
     return inode_num_file_name;
@@ -131,6 +133,20 @@ void set_inode_bitmap(int inode_num){
     return;
 }
 
+/* Sets the inode bitmap to 0 for the inode corresponding to inode_num
+ */
+void unset_inode_bitmap(int inode_num){
+    struct ext2_group_desc *group_desc = (struct ext2_group_desc *)
+                                            (disk + 2 * EXT2_BLOCK_SIZE);
+    unsigned char *inode_bitmap = disk + group_desc->bg_inode_bitmap * EXT2_BLOCK_SIZE;
+
+    int inode_index = inode_num - 1;
+    int byte_index = inode_index / 8;
+    int bit_in_byte = inode_index % 8;
+    *(inode_bitmap + byte_index) &= ~(1 << bit_in_byte);
+    return;
+}
+
 /* Returns 1 if the block with block_num is in use, 0 otherwise.
  */
 int check_block_bitmap(int block_num){
@@ -143,7 +159,7 @@ int check_block_bitmap(int block_num){
     return (1 << bit_in_byte) & (*(block_bitmap + byte_index));
 }
 
-/* Returns 1 if the block with block_num is in use, 0 otherwise.
+/* Sets the block bitmap to 1 for the block corresponding to block_num
  */
 void set_block_bitmap(int block_num){
     struct ext2_group_desc *group_desc = (struct ext2_group_desc *)
@@ -153,6 +169,19 @@ void set_block_bitmap(int block_num){
     int byte_index = block_num / 8;
     int bit_in_byte = block_num % 8;
     *(block_bitmap + byte_index) |= (1 << bit_in_byte);
+    return;
+}
+
+/* Sets the block bitmap to 0 for the block corresponding to block_num
+ */
+void unset_block_bitmap(int block_num){
+    struct ext2_group_desc *group_desc = (struct ext2_group_desc *)
+                                            (disk + 2 * EXT2_BLOCK_SIZE);
+    unsigned char *block_bitmap = disk + group_desc->bg_block_bitmap * EXT2_BLOCK_SIZE;
+
+    int byte_index = block_num / 8;
+    int bit_in_byte = block_num % 8;
+    *(block_bitmap + byte_index) &= ~(1 << bit_in_byte);
     return;
 }
 
@@ -222,7 +251,7 @@ int allocate_inode(){
 }
 
 unsigned char *allocate_dir_entry_slot(struct ext2_inode *p_inode, 
-                              struct ext2_dir_entry_2 *dir_entry){
+                                       struct ext2_dir_entry_2 *dir_entry){
     int i;
     int dir_size = sizeof(struct ext2_dir_entry_2) 
                    + sizeof(char) * dir_entry->name_len;
@@ -244,9 +273,6 @@ unsigned char *allocate_dir_entry_slot(struct ext2_inode *p_inode,
             p_inode->i_block[i] = cur_block;
 
         }
-
-        // TODO: add an if statement checking to ensure 
-
         first_entry = disk + p_inode->i_block[i] * EXT2_BLOCK_SIZE;
         cur_entry = first_entry;
 
@@ -254,6 +280,12 @@ unsigned char *allocate_dir_entry_slot(struct ext2_inode *p_inode,
         do {
             unsigned int new_rec_len;
             struct ext2_dir_entry_2 *cur_dir_entry = ((struct ext2_dir_entry_2 *) cur_entry);
+
+            if ((dir_entry->name_len == cur_dir_entry->name_len) 
+                && (strncmp(dir_entry->name, cur_dir_entry->name, dir_entry->name_len) == 0)){
+                printf("Error: File with the same name exists.\n");
+                return NULL;
+            }
             cur_dir_entry_size = sizeof(cur_dir_entry) + sizeof(char) * cur_dir_entry->name_len;
             unallocated_gap_size = cur_dir_entry->rec_len - cur_dir_entry_size;
 
@@ -298,6 +330,83 @@ unsigned char *allocate_dir_entry_slot(struct ext2_inode *p_inode,
     return NULL;
 }
 
+/* Search the directory with p_inode for the file with name victim_name 
+ * and inode victim_inode_num, return a pointer to the corresponding 
+ * directory entry, NULL if it was not found.
+ */
+struct ext2_dir_entry_2 *find_dir_entry(struct ext2_inode *p_inode, 
+                              char *victim_name,
+                              unsigned int victim_inode_num){
+    int i;
+    unsigned char *first_entry;
+    unsigned char *cur_entry;
+
+    // Iterate through the direct 12 data blocks
+    for(i = 0; i < 12; ++i){
+        if (!check_block_bitmap(p_inode->i_block[i])){
+            return NULL;
+        }
+        first_entry = disk + p_inode->i_block[i] * EXT2_BLOCK_SIZE;
+        cur_entry = first_entry;
+
+        // Iterate through the ith block
+        do {
+            struct ext2_dir_entry_2 *cur_dir_entry = ((struct ext2_dir_entry_2 *) cur_entry);
+
+            if ((cur_dir_entry->inode == victim_inode_num) 
+                && (cur_dir_entry->name_len == strlen(victim_name)) 
+                && (strncmp(victim_name, cur_dir_entry->name, cur_dir_entry->name_len) == 0)){
+                return cur_dir_entry;
+            }
+            cur_entry += ((struct ext2_dir_entry_2 *) cur_entry)->rec_len;
+
+        // While the whole block has not been covered
+        } while ((cur_entry - first_entry) % EXT2_BLOCK_SIZE != 0);
+    }
+    return NULL;
+}
+
+/* Search the directory with p_inode for the file with name victim_name 
+ * and inode victim_inode_num, return a pointer to the directory entry 
+ * immediately before the entry with the given specifications. NULL if 
+ * it was not found or if the specified entry lies at the beginning of 
+ * a block.
+ */
+struct ext2_dir_entry_2 *find_prev_dir_entry(struct ext2_inode *p_inode, 
+                                   char *victim_name,
+                                   unsigned int victim_inode_num){
+    int i;
+    unsigned char *first_entry;
+    unsigned char *cur_entry;
+    struct ext2_dir_entry_2 *prev_dir_entry; 
+
+    // Iterate through the direct 12 data blocks
+    for(i = 0; i < 12; ++i){
+        if (!check_block_bitmap(p_inode->i_block[i])){
+            return NULL;
+        }
+        first_entry = disk + p_inode->i_block[i] * EXT2_BLOCK_SIZE;
+        cur_entry = first_entry;
+        prev_dir_entry = NULL;
+
+        // Iterate through the ith block
+        do {
+            struct ext2_dir_entry_2 *cur_dir_entry = ((struct ext2_dir_entry_2 *) cur_entry);
+
+            if ((cur_dir_entry->inode == victim_inode_num) 
+                && (cur_dir_entry->name_len == strlen(victim_name)) 
+                && (strncmp(victim_name, cur_dir_entry->name, cur_dir_entry->name_len) == 0)){
+                return prev_dir_entry;
+            }
+            prev_dir_entry = cur_dir_entry;
+            cur_entry += ((struct ext2_dir_entry_2 *) cur_entry)->rec_len;
+
+        // While the whole block has not been covered
+        } while ((cur_entry - first_entry) % EXT2_BLOCK_SIZE != 0);
+    }
+    return NULL;
+}
+
 unsigned int insert_cur_and_parent_dir(unsigned int p_inode_num, 
                                        struct ext2_inode *cur_inode,
                                        unsigned int cur_inode_num){
@@ -332,7 +441,7 @@ unsigned int insert_cur_and_parent_dir(unsigned int p_inode_num,
 
     if(allocate_dir_entry_slot(cur_inode, new_entry) == NULL){
 
-        if(cur_inode->i_block[12] < 1
+        if(cur_inode->i_block[12] < EXT2_GOOD_OLD_FIRST_INO
             && (cur_inode->i_block[12] = allocate_inode()) < 0){
             printf("Error: inode allocation failed.\n");
             free(new_entry);
@@ -401,7 +510,7 @@ int insert_dir_entry(struct ext2_inode *p_inode,
     // If necessary, place entry into indirect block
     if(allocate_dir_entry_slot(p_inode, new_entry) == NULL){
 
-        if(p_inode->i_block[12] < 1){
+        if(p_inode->i_block[12] < EXT2_GOOD_OLD_FIRST_INO){
             if ((p_inode->i_block[12] = allocate_inode()) < 0){
                 printf("Error: inode allocation failed.\n");
                 free(new_entry);
@@ -421,5 +530,38 @@ int insert_dir_entry(struct ext2_inode *p_inode,
     }
     insert_cur_and_parent_dir(parent_dir_inode_num, allocated_inode, e_inode_num);
     free(new_entry);
+    return 0;
+}
+
+int remove_dir_entry(struct ext2_inode *p_inode, 
+                     char *victim_name,
+                     unsigned int victim_inode_num){
+    struct ext2_dir_entry_2 *victim_dir_entry = find_dir_entry(p_inode, 
+        victim_name, 
+        victim_inode_num);
+    struct ext2_dir_entry_2 *victim_dir_entry_prev = find_prev_dir_entry(p_inode, 
+        victim_name, 
+        victim_inode_num);
+
+    // REMEMBER TO FREE THE INODE AND BLOCKS
+
+    // If victim_dir_entry is not the first entry
+    if ((victim_dir_entry != NULL) && (victim_dir_entry_prev != NULL)){
+        victim_dir_entry->inode = 0;
+        victim_dir_entry->name_len = 0;
+        victim_dir_entry->file_type = EXT2_FT_UNKNOWN;
+        victim_dir_entry_prev->rec_len += victim_dir_entry->rec_len;
+        victim_dir_entry->rec_len = 0;
+
+    // If victim_dir_entry is the first entry
+    } else if ((victim_dir_entry != NULL) && (victim_dir_entry_prev == NULL)){
+        victim_dir_entry->inode = 0;
+        victim_dir_entry->name_len = 0;
+        victim_dir_entry->file_type = EXT2_FT_UNKNOWN;
+        victim_dir_entry->rec_len = EXT2_BLOCK_SIZE;
+    } else {
+        printf("Error: Directory entry not found.\n");
+        return -1;
+    }
     return 0;
 }
