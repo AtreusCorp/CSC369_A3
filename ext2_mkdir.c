@@ -24,7 +24,11 @@ int main(int argc, char **argv){
   	}
 
     // Refers to the target directory prefixed by '/'
-    parent_dir_end = strrchr(argv[2], '/');
+    if ((parent_dir_end = strrchr(argv[2], '/')) == NULL){
+        printf("Error: %s does not exist.\n", argv[2]);
+        return ENOENT;
+    }
+
 
     // If the target directory had a slash at the end, handle accordingly
     if (strlen(parent_dir_end + 1) == 0){
@@ -33,7 +37,6 @@ int main(int argc, char **argv){
     }
 
     // Extract the target and parent directory names
-
     if (strlen(parent_dir_end + 1) > EXT2_NAME_LEN){
         printf("Error: Directory name too long.\n");
         return ENAMETOOLONG;

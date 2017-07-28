@@ -3,6 +3,8 @@
 unsigned char *disk;
 
 void print_entries(struct ext2_inode *dir_inode, int a_flag){
+    struct ext2_super_block *super_block = 
+        (struct ext2_super_block *) (disk + EXT2_BLOCK_SIZE);
 	int i;
 	unsigned char *first_entry;
     unsigned char *cur_entry;
@@ -10,7 +12,8 @@ void print_entries(struct ext2_inode *dir_inode, int a_flag){
     char *parent_dir = "..";
 
 	for(i = 0; i < 12; ++i){
-        if ((dir_inode->i_block[i]) > 0){
+        if (check_block_bitmap(dir_inode->i_block[i])
+            && dir_inode->i_block[i] >= super_block->s_first_data_block){
 
             // Keep track of beginning to ensure block overflow doesn't occur
             first_entry = disk + dir_inode->i_block[i] * EXT2_BLOCK_SIZE;
