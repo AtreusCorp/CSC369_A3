@@ -426,7 +426,7 @@ struct ext2_dir_entry_2 *find_prev_dir_entry(struct ext2_inode *p_inode,
     return NULL;
 }
 
-unsigned int insert_cur_and_parent_dir(unsigned int p_inode_num, 
+int insert_cur_and_parent_dir(unsigned int p_inode_num, 
                                        struct ext2_inode *cur_inode,
                                        unsigned int cur_inode_num){
 
@@ -511,9 +511,8 @@ int insert_dir_entry(struct ext2_inode *p_inode,
             printf("Error: inode allocation failed.\n");
             return -1;
         }
-        new_entry->inode = e_inode_num;
-
     }
+    new_entry->inode = e_inode_num;
 
     allocated_inode = fetch_inode_from_num(e_inode_num);
     if (file_type == EXT2_FT_REG_FILE){
@@ -569,8 +568,6 @@ int remove_dir_entry(struct ext2_inode *p_inode,
     struct ext2_dir_entry_2 *victim_dir_entry_prev = find_prev_dir_entry(p_inode, 
         victim_name, 
         victim_inode_num);
-
-    // REMEMBER TO FREE THE INODE AND BLOCKS
 
     // If victim_dir_entry is not the first entry
     if ((victim_dir_entry != NULL) && (victim_dir_entry_prev != NULL)){
