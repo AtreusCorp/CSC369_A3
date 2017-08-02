@@ -283,6 +283,8 @@ unsigned char *allocate_dir_entry_slot(struct ext2_inode *p_inode,
                 return NULL;
             }
             p_inode->i_block[i] = cur_block;
+            p_inode->i_blocks += 2;
+            p_inode->i_size += EXT2_BLOCK_SIZE;
 
         }
         first_entry = disk + p_inode->i_block[i] * EXT2_BLOCK_SIZE;
@@ -533,6 +535,7 @@ int insert_dir_entry(struct ext2_inode *p_inode,
     // If necessary, place entry into indirect block
     if(allocate_dir_entry_slot(p_inode, new_entry) == NULL){
 
+        // Allocate a new inode if needed
         if(p_inode->i_block[12] < EXT2_GOOD_OLD_FIRST_INO
            || !check_inode_bitmap(p_inode->i_block[12])){
 
@@ -541,20 +544,30 @@ int insert_dir_entry(struct ext2_inode *p_inode,
                 free(new_entry);
                 return -1;
             }
-            p_inode->i_blocks += 2;
-            p_inode->i_size += EXT2_BLOCK_SIZE;
-
         }
-        fetch_inode_from_num(p_inode->i_block[12])->i_mode |= EXT2_S_IFDIR;
 
-        if (allocate_dir_entry_slot(
-                fetch_inode_from_num(p_inode->i_block[12]), new_entry) == NULL){
+        struct ext2_inode *indirect_inode = 
+                fetch_inode_from_num(p_inode->i_block[12]);
+
+        // It's a directory
+        indirect_inode->i_mode |= EXT2_S_IFDIR;
+
+        if (allocate_dir_entry_slot(indirect_inode, new_entry) == NULL){
             printf("Error: dir entry allocation failed.\n");
             free(new_entry);
             return -1;
         }
+
+        // Allocate_dir_entry_slot may update these fields in the indirect inode, 
+        // but not the base inode. Reflect these changes
+        p_inode->i_blocks += indirect_inode->i_blocks;
+        p_inode->i_size += indirect_inode->i_size;
     }
-    insert_cur_and_parent_dir(parent_dir_inode_num, allocated_inode, e_inode_num);
+
+    // Set up the directory properly
+    if (file_type == EXT2_FT_DIR){
+        insert_cur_and_parent_dir(parent_dir_inode_num, allocated_inode, e_inode_num);
+    }
     free(new_entry);
     return 0;
 }
