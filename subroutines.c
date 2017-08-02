@@ -467,23 +467,35 @@ int insert_cur_and_parent_dir(unsigned int p_inode_num,
 
     if(allocate_dir_entry_slot(cur_inode, new_entry) == NULL){
 
-        if((cur_inode->i_block[12] < EXT2_GOOD_OLD_FIRST_INO
-            || !check_inode_bitmap(cur_inode->i_block[12]))
+        if (cur_inode->i_block[12] < EXT2_GOOD_OLD_FIRST_INO
+            || !check_inode_bitmap(cur_inode->i_block[12])){
+           
+            if ((cur_inode->i_block[12] = allocate_inode()) < 0){
 
-           && (cur_inode->i_block[12] = allocate_inode()) < 0){
-            printf("Error: inode allocation failed.\n");
-            free(new_entry);
-            return -1;
+                printf("Error: inode allocation failed.\n");
+                free(new_entry);
+                return -1;
+            }
+            cur_inode->i_blocks += 2;
         }
-        cur_inode->i_blocks += 2;
-        fetch_inode_from_num(cur_inode->i_block[12])->i_mode |= EXT2_S_IFDIR;
 
-        if (allocate_dir_entry_slot(
-                fetch_inode_from_num(cur_inode->i_block[12]), new_entry) == NULL){
+        struct ext2_inode *indirect_inode = 
+                fetch_inode_from_num(cur_inode->i_block[12]);
+        int indirect_block_count_pre = indirect_inode->i_blocks;
+        int indirect_size_pre = indirect_inode->i_size;
+
+        indirect_inode->i_mode |= EXT2_S_IFDIR;
+
+        if (allocate_dir_entry_slot(indirect_inode, new_entry) == NULL){
             printf("Error: dir entry allocation failed.\n");
             free(new_entry);
             return -1;
         }
+
+        // Allocate_dir_entry_slot may update these fields in the indirect inode, 
+        // but not the base inode. Reflect these changes
+        cur_inode->i_blocks += (indirect_inode->i_blocks - indirect_block_count_pre);
+        cur_inode->i_size += (indirect_inode->i_size - indirect_size_pre);
     }
     ++fetch_inode_from_num(p_inode_num)->i_links_count;
     free(new_entry);
@@ -544,10 +556,14 @@ int insert_dir_entry(struct ext2_inode *p_inode,
                 free(new_entry);
                 return -1;
             }
+            p_inode->i_blocks += 2;
         }
 
         struct ext2_inode *indirect_inode = 
                 fetch_inode_from_num(p_inode->i_block[12]);
+
+        int indirect_block_count_pre = indirect_inode->i_blocks;
+        int indirect_size_pre = indirect_inode->i_size;
 
         // It's a directory
         indirect_inode->i_mode |= EXT2_S_IFDIR;
@@ -560,8 +576,8 @@ int insert_dir_entry(struct ext2_inode *p_inode,
 
         // Allocate_dir_entry_slot may update these fields in the indirect inode, 
         // but not the base inode. Reflect these changes
-        p_inode->i_blocks += indirect_inode->i_blocks;
-        p_inode->i_size += indirect_inode->i_size;
+        p_inode->i_blocks += (indirect_inode->i_blocks - indirect_block_count_pre);
+        p_inode->i_size += (indirect_inode->i_size - indirect_size_pre);
     }
 
     // Set up the directory properly
