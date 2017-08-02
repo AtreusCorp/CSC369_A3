@@ -139,17 +139,7 @@ int search_dir(char *file_name, struct ext2_inode *dir_inode){
     struct ext2_inode *inode_table = (struct ext2_inode *)(disk + group_desc->bg_inode_table 
                                                                   * EXT2_BLOCK_SIZE);
     if((inode_num_file_name = search_dir_direct_blks(file_name, dir_inode)) == -1) {
-
-        // Search remaining the indirect blocks
-        // TODO: Ask: can we still assume 1 is the bad inode?
-        if (dir_inode->i_block[12] >= EXT2_GOOD_OLD_FIRST_INO
-            && check_inode_bitmap(dir_inode->i_block[12])) {
-
-            struct ext2_inode *indirect_dir_inode = inode_table + dir_inode->i_block[12];
-            if ((inode_num_file_name = search_dir_direct_blks(file_name, indirect_dir_inode)) == -1){
-                return -1;
-            }
-        }
+        return -1;
     }
     return inode_num_file_name;
 }
@@ -439,9 +429,7 @@ int insert_cur_and_parent_dir(unsigned int p_inode_num,
     new_entry->inode = cur_inode_num;
     strncpy(new_entry->name, ".", 1);
 
-    // If necessary, place entry into indirect block
     if(allocate_dir_entry_slot(cur_inode, new_entry) == NULL){
-
         printf("Error: dir entry allocation failed.\n");
             free(new_entry);
             return -1;
@@ -452,7 +440,6 @@ int insert_cur_and_parent_dir(unsigned int p_inode_num,
     strncpy(new_entry->name, "..", 2);
 
     if(allocate_dir_entry_slot(cur_inode, new_entry) == NULL){
-
         printf("Error: dir entry allocation failed.\n");
             free(new_entry);
             return -1;

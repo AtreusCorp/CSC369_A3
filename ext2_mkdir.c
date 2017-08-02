@@ -29,7 +29,6 @@ int main(int argc, char **argv){
         return ENOENT;
     }
 
-
     // If the target directory had a slash at the end, handle accordingly
     if (strlen(parent_dir_end + 1) == 0){
         *parent_dir_end = '\0';

@@ -61,7 +61,6 @@ int main(int argc, char **argv){
         printf("Error: %s does not exist.\n", argv[2]);
         return ENOENT;
     }
-
     strncpy(target_file_name, target_dir_name_end + 1, EXT2_NAME_LEN);
     *(target_dir_name_end + 1) = '\0';
     strncpy(target_dir_name, argv[targeted_file_index], EXT2_NAME_LEN);
@@ -86,7 +85,7 @@ int main(int argc, char **argv){
 		}
 		++source_file_inode->i_links_count;
 		return 0;
-        
+
 	} else {
 		// The case for soft link 
 		// TODO: Should we store the first slash?
@@ -103,11 +102,11 @@ int main(int argc, char **argv){
 
 			return -1;
 		}
-		if((new_file_inode_num = search_dir(target_file_name, target_dir_inode)) < 0){
+		
+        if((new_file_inode_num = search_dir(target_file_name, target_dir_inode)) < 0){
 
 			return -1;
 		}
-
 		new_file_inode = fetch_inode_from_num(new_file_inode_num);
 		beginning_of_block = disk + new_file_inode->i_block[0] * EXT2_BLOCK_SIZE;
 		strncpy((char *) beginning_of_block, argv[source_file_index] + 1, EXT2_NAME_LEN);
