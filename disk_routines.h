@@ -7,7 +7,7 @@
 #include <sys/mman.h>
 #include <fcntl.h>
 #include <errno.h>
-#include <math.h>
+#include <time.h>
 #include "ext2.h"
 #ifndef ROUTINES
 #define ROUTINES

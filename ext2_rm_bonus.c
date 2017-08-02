@@ -39,6 +39,7 @@ void recursive_remove(unsigned int dir_inum_to_delete,
 
     if (S_ISDIR(dir_inode_to_delete->i_mode) != 1){
 
+        dir_inode_to_delete->i_dtime = time(NULL);
         --dir_inode_to_delete->i_links_count;
         if (dir_inode_to_delete->i_links_count == 0){
             unset_blocks_and_inodes(dir_inum_to_delete, 
@@ -113,6 +114,7 @@ void recursive_remove(unsigned int dir_inum_to_delete,
             } while ((cur_entry - first_entry) % EXT2_BLOCK_SIZE != 0);
         }
     }
+    dir_inode_to_delete->i_dtime = time(NULL);
     --dir_inode_to_delete->i_links_count;
     if (dir_inode_to_delete->i_links_count == 0){
         unset_blocks_and_inodes(dir_inum_to_delete, 

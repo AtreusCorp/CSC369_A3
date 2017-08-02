@@ -68,7 +68,6 @@ int main(int argc, char **argv){
         	   "file cannot exist on this system.\n");
         return EEXIST;
     }
-
     strncpy(target_dir, parent_dir_end + 1, EXT2_NAME_LEN);
     *(parent_dir_end + 1) = '\0';
     strncpy(parent_dir, argv[2], EXT2_NAME_LEN);
@@ -83,6 +82,7 @@ int main(int argc, char **argv){
     	return -1;
     }
     --target_inode->i_links_count;
+    target_inode->i_dtime = time(NULL);
 
     if (target_inode->i_links_count == 0){
     	unset_blocks_and_inodes(target_inode_num, target_inode);
