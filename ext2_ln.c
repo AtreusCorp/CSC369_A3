@@ -75,19 +75,18 @@ int main(int argc, char **argv){
 
 
 	if (soft_flag == 0) {
+        // The case for hard link
 		if (insert_dir_entry(target_dir_inode, 
-		// The case for hard link
-		target_dir_inode_num, 
-		source_file_inode_num,
-		strlen(target_file_name),
-		EXT2_FT_REG_FILE,
-		target_file_name
-		) < 0) {
+		                     target_dir_inode_num, 
+		                     source_file_inode_num,
+		                     strlen(target_file_name),
+		                     EXT2_FT_REG_FILE,
+		                     target_file_name) < 0) {
 			return -1;
 		}
-
 		++source_file_inode->i_links_count;
 		return 0;
+        
 	} else {
 		// The case for soft link 
 		// TODO: Should we store the first slash?
@@ -96,16 +95,14 @@ int main(int argc, char **argv){
 		struct ext2_inode *new_file_inode;
 
 		if (insert_dir_entry(target_dir_inode, 
-		target_dir_inode_num, 
-		0,
-		strlen(target_file_name),
-		EXT2_FT_SYMLINK,
-		target_file_name
-		) < 0) {
+                    		 target_dir_inode_num, 
+                    		 0,
+                    		 strlen(target_file_name),
+                    		 EXT2_FT_SYMLINK,
+                    		 target_file_name) < 0) {
 
 			return -1;
 		}
-
 		if((new_file_inode_num = search_dir(target_file_name, target_dir_inode)) < 0){
 
 			return -1;

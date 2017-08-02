@@ -47,72 +47,60 @@ void recursive_remove(unsigned int dir_inum_to_delete,
         }
         return;
     }
+    for(i = 0; i < 12; ++i){
 
-    for (j = 0; j < 2; ++j){
-        if (j == 1 
-            && check_inode_bitmap(dir_inode_to_delete->i_block[12])
-            && dir_inode_to_delete->i_block[i] >= super_block->s_first_data_block){
-
-            dir_inode_to_delete = fetch_inode_from_num(
-                                   dir_inode_to_delete->i_block[12]);
-        } else if (j == 1) {
+        if (!(check_block_bitmap(dir_inode_to_delete->i_block[i]))
+            || dir_inode_to_delete->i_block[i] <= super_block->s_first_data_block){
+            
             break;
         }
-        for(i = 0; i < 12; ++i){
+        first_entry = disk + dir_inode_to_delete->i_block[i] * EXT2_BLOCK_SIZE;
+        cur_entry = first_entry;
 
-            if (!(check_block_bitmap(dir_inode_to_delete->i_block[i]))
-                || dir_inode_to_delete->i_block[i] <= super_block->s_first_data_block){
-                
-                break;
-            }
-            first_entry = disk + dir_inode_to_delete->i_block[i] * EXT2_BLOCK_SIZE;
-            cur_entry = first_entry;
+        do {
+            struct ext2_dir_entry_2 *dir_entry = ((struct ext2_dir_entry_2 *) 
+                                                    cur_entry);
+            unsigned int dir_entry_inode_num = dir_entry->inode;
+            struct ext2_inode *dir_entry_inode = 
+                                    fetch_inode_from_num(dir_entry_inode_num);
+            
+            if (dir_entry_inode_num >= EXT2_GOOD_OLD_FIRST_INO
+                && dir_entry_inode_num != dir_inum_to_delete
+                && dir_entry_inode_num != parent_inum){
 
-            do {
-                struct ext2_dir_entry_2 *dir_entry = ((struct ext2_dir_entry_2 *) 
-                                                        cur_entry);
-                unsigned int dir_entry_inode_num = dir_entry->inode;
-                struct ext2_inode *dir_entry_inode = 
-                                        fetch_inode_from_num(dir_entry_inode_num);
-                
-                if (dir_entry_inode_num >= EXT2_GOOD_OLD_FIRST_INO
-                    && dir_entry_inode_num != dir_inum_to_delete
-                    && dir_entry_inode_num != parent_inum){
+                if (S_ISDIR(dir_entry_inode->i_mode)){
 
-                    if (S_ISDIR(dir_entry_inode->i_mode)){
+                    recursive_remove(dir_entry_inode_num, 
+                                     dir_inum_to_delete);
+                    --dir_entry_inode->i_links_count;
 
-                        recursive_remove(dir_entry_inode_num, 
-                                         dir_inum_to_delete);
-                        --dir_entry_inode->i_links_count;
-
-                        if (dir_entry_inode->i_links_count == 0){
-                            unset_blocks_and_inodes(dir_entry_inode_num, 
-                                                    dir_entry_inode);
-                        }
-                    } else {
-                        char dir_entry_name[EXT2_NAME_LEN + 1];
-                        strncpy(dir_entry_name, dir_entry->name, dir_entry->name_len);
-                        dir_entry_name[dir_entry->name_len] = '\0';
-                        remove_dir_entry(dir_inode_to_delete, dir_entry_name, 
-                                         dir_entry_inode_num);
-                        --dir_entry_inode->i_links_count;
-
-                        if (dir_entry_inode->i_links_count == 0){
-                            unset_blocks_and_inodes(dir_entry_inode_num, 
-                                                    dir_entry_inode);
-                        }
+                    if (dir_entry_inode->i_links_count == 0){
+                        unset_blocks_and_inodes(dir_entry_inode_num, 
+                                                dir_entry_inode);
                     }
                 } else {
-                    if (dir_entry_inode_num == dir_inum_to_delete){
-                        --dir_inode_to_delete->i_links_count;
-                    } else if (dir_entry_inode_num == parent_inum){
-                        --fetch_inode_from_num(parent_inum)->i_links_count;
-                    }
+                    char dir_entry_name[EXT2_NAME_LEN + 1];
+                    strncpy(dir_entry_name, dir_entry->name, dir_entry->name_len);
+                    dir_entry_name[dir_entry->name_len] = '\0';
+                    remove_dir_entry(dir_inode_to_delete, dir_entry_name, 
+                                     dir_entry_inode_num);
+                    --dir_entry_inode->i_links_count;
 
+                    if (dir_entry_inode->i_links_count == 0){
+                        unset_blocks_and_inodes(dir_entry_inode_num, 
+                                                dir_entry_inode);
+                    }
                 }
-                cur_entry += ((struct ext2_dir_entry_2 *) cur_entry)->rec_len;
-            } while ((cur_entry - first_entry) % EXT2_BLOCK_SIZE != 0);
-        }
+            } else {
+                if (dir_entry_inode_num == dir_inum_to_delete){
+                    --dir_inode_to_delete->i_links_count;
+                } else if (dir_entry_inode_num == parent_inum){
+                    --fetch_inode_from_num(parent_inum)->i_links_count;
+                }
+
+            }
+            cur_entry += ((struct ext2_dir_entry_2 *) cur_entry)->rec_len;
+        } while ((cur_entry - first_entry) % EXT2_BLOCK_SIZE != 0);
     }
     dir_inode_to_delete->i_dtime = time(NULL);
     --dir_inode_to_delete->i_links_count;
