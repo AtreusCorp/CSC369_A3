@@ -90,7 +90,11 @@ void unset_block_bitmap(int block_num){
     return;
 }
 
-int search_dir_direct_blks(char * file_name, struct ext2_inode *dir_inode) {
+/* Search the directory inode dir_inode for the file with the name of file_name.
+ * Returns the inode number of the file found, -1 if the file was not found or 
+ * dir_inode is not a directory.
+ */
+int search_dir(char * file_name, struct ext2_inode *dir_inode) {
     int i;
     unsigned char *first_entry;
     unsigned char *cur_entry;
@@ -126,22 +130,6 @@ int search_dir_direct_blks(char * file_name, struct ext2_inode *dir_inode) {
         } while ((cur_entry - first_entry) % EXT2_BLOCK_SIZE != 0);
     }
     return -1;
-}
-
-/* Search the directory inode dir_inode for the file with the name of file_name.
- * Returns the inode number of the file found, -1 if the file was not found or 
- * dir_inode is not a directory.
- */
-int search_dir(char *file_name, struct ext2_inode *dir_inode){
-    int inode_num_file_name;
-    struct ext2_group_desc *group_desc = (struct ext2_group_desc *)
-                                            (disk + 2 * EXT2_BLOCK_SIZE);
-    struct ext2_inode *inode_table = (struct ext2_inode *)(disk + group_desc->bg_inode_table 
-                                                                  * EXT2_BLOCK_SIZE);
-    if((inode_num_file_name = search_dir_direct_blks(file_name, dir_inode)) == -1) {
-        return -1;
-    }
-    return inode_num_file_name;
 }
 
 /* Given a path as a string, return the inode number of the 
