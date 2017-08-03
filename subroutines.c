@@ -150,6 +150,7 @@ int get_inode_num(char *path, unsigned int relative_path_inode_num){
         return relative_path_inode_num;
     }
 
+    // Separate the first parent dir from the path
 	if ((end_ptr = strchr(trimmed_root, '/')) != NULL){
 	    strncpy(dir_str, trimmed_root, end_ptr - trimmed_root + 1);
         dir_str[end_ptr - trimmed_root] = '\0';
@@ -161,6 +162,11 @@ int get_inode_num(char *path, unsigned int relative_path_inode_num){
 
     if ((next_inode = search_dir(dir_str, relative_path_inode)) == -1){
         return -1;
+    }
+
+    // In the case where the given string did not end in a /
+    if (strlen(end_ptr) == 0){
+        return next_inode;
     }
 
     return get_inode_num(end_ptr, next_inode);
@@ -263,6 +269,8 @@ unsigned char *allocate_dir_entry_slot(struct ext2_inode *p_inode,
             p_inode->i_block[i] = cur_block;
             p_inode->i_blocks += 2;
             p_inode->i_size += EXT2_BLOCK_SIZE;
+            ((struct ext2_dir_entry_2 *)
+                (disk + p_inode->i_block[i] * EXT2_BLOCK_SIZE))->rec_len = EXT2_BLOCK_SIZE;
 
         }
         first_entry = disk + p_inode->i_block[i] * EXT2_BLOCK_SIZE;
@@ -278,7 +286,14 @@ unsigned char *allocate_dir_entry_slot(struct ext2_inode *p_inode,
                 printf("Error: File with the same name exists.\n");
                 return NULL;
             }
-            cur_dir_entry_size = sizeof(cur_dir_entry) + sizeof(char) * cur_dir_entry->name_len;
+
+            // Replace NULL entries
+            if (cur_dir_entry->inode != 0){
+                cur_dir_entry_size = sizeof(cur_dir_entry) + sizeof(char) * cur_dir_entry->name_len;
+            } else {
+                cur_dir_entry_size = 0;
+            }
+
             unallocated_gap_size = cur_dir_entry->rec_len - cur_dir_entry_size;
 
             // 4 byte alignment
