@@ -29,7 +29,7 @@ void unset_blocks_and_inodes(unsigned int inode_num,
 
 void recursive_remove(unsigned int dir_inum_to_delete, 
                       unsigned int parent_inum){
-    int i, j;
+    int i;
     struct ext2_super_block *super_block = 
         (struct ext2_super_block *) (disk + EXT2_BLOCK_SIZE);
     unsigned char *first_entry;
@@ -61,6 +61,7 @@ void recursive_remove(unsigned int dir_inum_to_delete,
             struct ext2_dir_entry_2 *dir_entry = ((struct ext2_dir_entry_2 *) 
                                                     cur_entry);
             unsigned int dir_entry_inode_num = dir_entry->inode;
+            unsigned int dir_entry_rec_len = dir_entry->rec_len;
             struct ext2_inode *dir_entry_inode = 
                                     fetch_inode_from_num(dir_entry_inode_num);
             
@@ -99,7 +100,7 @@ void recursive_remove(unsigned int dir_inum_to_delete,
                 }
 
             }
-            cur_entry += ((struct ext2_dir_entry_2 *) cur_entry)->rec_len;
+            cur_entry += dir_entry_rec_len;
         } while ((cur_entry - first_entry) % EXT2_BLOCK_SIZE != 0);
     }
     dir_inode_to_delete->i_dtime = time(NULL);
