@@ -68,18 +68,20 @@ size_t copy_stream_to_inode(FILE* filestream, struct ext2_inode *dest_inode) {
     size_t total_bytes_read = 0;
 
     for (size_t blk_counter = 0; blk_counter < 12; ++blk_counter) {
-        if ((total_bytes_read += fread(block_buffer, 1, EXT2_BLOCK_SIZE, src_file_stream)) % EXT2_BLOCK_SIZE == 0) {
-            // Allocate a new data block to dest_inode, if needed
-            if ((allocated_block_num = allocate_block()) < 0){
-                printf("Error: Block Allocation failed.\n");
-                exit(-1);
-            }
-            dest_inode->i_block[blk_counter] = (unsigned) allocated_block_num;
-            dest_inode->i_blocks += 2;
-            dest_inode->i_size += EXT2_BLOCK_SIZE;
-            memcpy((disk + allocated_block_num * EXT2_BLOCK_SIZE), block_buffer, EXT2_BLOCK_SIZE);
-            memset(block_buffer, 0, EXT2_BLOCK_SIZE);
-        } else {
+        size_t bytes_read = fread(block_buffer, 1, EXT2_BLOCK_SIZE, src_file_stream);
+        // Allocate a new data block to dest_inode, if needed
+        if ((allocated_block_num = allocate_block()) < 0){
+            printf("Error: Block Allocation failed.\n");
+            exit(-1);
+        }
+        dest_inode->i_block[blk_counter] = (unsigned) allocated_block_num;
+        dest_inode->i_blocks += 2;
+        dest_inode->i_size += bytes_read;
+        memcpy((disk + allocated_block_num * EXT2_BLOCK_SIZE), block_buffer, bytes_read);
+        memset(block_buffer, 0, EXT2_BLOCK_SIZE);
+        total_bytes_read += bytes_read;
+
+        if (bytes_read != EXT2_BLOCK_SIZE) {
             // We have finished copying data already
             return total_bytes_read;
         }
