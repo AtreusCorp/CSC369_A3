@@ -195,7 +195,9 @@ int main(int argc, char **argv){
 
     // === BEGIN copying data ===
 
-    size_t bytes_copied = copy_stream_to_inode(src_file_stream, dest_pdir_inode);
+    int dest_fullpath_inode_num = get_inode_num(dest_fullpath, EXT2_ROOT_INO);
+    struct ext2_inode *dest_fullpath_inode = fetch_inode_from_num(dest_fullpath_inode_num);
+    size_t bytes_copied = copy_stream_to_inode(src_file_stream, dest_fullpath_inode);
     if (bytes_copied < src_file_stat.st_size) {
         // Need 1 level of indirection here
         dest_pdir_inode->i_block[12] = (unsigned) allocate_inode();
