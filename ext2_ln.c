@@ -8,6 +8,7 @@ int main(int argc, char **argv){
 	int targeted_file_path_len;
 	int target_dir_inode_num;
 	struct ext2_inode *target_dir_inode;
+    //TODO: Is it correct to assume dir_name's length is less EXT2_NAME_LEN + 1
 	char target_dir_name[EXT2_NAME_LEN + 1];
 	char target_file_name[EXT2_NAME_LEN + 1];
 	char *target_dir_name_end = NULL;

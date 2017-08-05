@@ -618,3 +618,13 @@ int remove_dir_entry(struct ext2_inode *p_inode,
     }
     return 0;
 }
+
+void assign_block_inode(struct ext2_inode *pinode, unsigned int inode_blk_num, unsigned int blk_num) {
+    struct ext2_super_block *super_block = (struct ext2_super_block *) (disk + EXT2_BLOCK_SIZE);
+    struct ext2_group_desc *group_desc = (struct ext2_group_desc *)
+            (disk + 2 * EXT2_BLOCK_SIZE);
+
+    pinode->i_block[inode_blk_num] = blk_num;
+    pinode->i_blocks += 2;
+    pinode->i_size += EXT2_BLOCK_SIZE;
+}
