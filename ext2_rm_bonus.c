@@ -25,9 +25,6 @@ void unset_blocks_and_inodes(unsigned int inode_num,
 
     if (inode->i_block[12] >= super_block->s_first_data_block){
         int *indirect_inode = (int *)(disk + inode->i_block[12] * EXT2_BLOCK_SIZE);
-        unset_inode_bitmap(*indirect_inode);
-        super_block->s_free_inodes_count += 1;
-        group_desc->bg_free_inodes_count += 1;
 
         for (int i = 0; i < EXT2_BLOCK_SIZE / sizeof(int); ++i){
             if (*(indirect_inode + i) >= super_block->s_first_data_block){
@@ -38,6 +35,9 @@ void unset_blocks_and_inodes(unsigned int inode_num,
                 break;
             }
         }
+        unset_inode_bitmap(*indirect_inode);
+        super_block->s_free_inodes_count += 1;
+        group_desc->bg_free_inodes_count += 1;
     }
 }
 
