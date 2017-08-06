@@ -6,7 +6,7 @@ unsigned char *disk;
 /* Unsets all bitmap flags used by the given inode.
  */
 void unset_blocks_and_inodes(unsigned int inode_num, 
-							 struct ext2_inode *inode){
+                             struct ext2_inode *inode){
 
     struct ext2_super_block *super_block = (struct ext2_super_block *) (disk + EXT2_BLOCK_SIZE);
     struct ext2_group_desc *group_desc = (struct ext2_group_desc *)
@@ -15,31 +15,31 @@ void unset_blocks_and_inodes(unsigned int inode_num,
     super_block->s_free_inodes_count += 1;
     group_desc->bg_free_inodes_count += 1;
 
-  	for (int i = 0; i < 12; ++i){
-  		if (inode->i_block[i] >= EXT2_GOOD_OLD_FIRST_INO){
-  			unset_block_bitmap(inode->i_block[i]);
+    for (int i = 0; i < 12; ++i){
+        if (inode->i_block[i] >= EXT2_GOOD_OLD_FIRST_INO){
+            unset_block_bitmap(inode->i_block[i]);
             super_block->s_free_blocks_count += 1;
             group_desc->bg_free_blocks_count += 1;
-  		}
-  	}
+        }
+    }
 
-  	if (inode->i_block[12] >= EXT2_GOOD_OLD_FIRST_INO){
-  		struct ext2_inode *indirect_inode = 
-  			fetch_inode_from_num(inode->i_block[12]);
-  		unset_inode_bitmap(inode->i_block[12]);
+    if (inode->i_block[12] >= super_block->s_first_data_block){
+        int *indirect_inode = (int *)(disk + inode->i_block[12] * EXT2_BLOCK_SIZE);
+        unset_inode_bitmap(*indirect_inode);
         super_block->s_free_inodes_count += 1;
         group_desc->bg_free_inodes_count += 1;
 
-  		for (int i = 0; i < 12; ++i){
-	  		if (indirect_inode->i_block[i] >= EXT2_GOOD_OLD_FIRST_INO){
-	  			unset_block_bitmap(inode->i_block[i]);
+        for (int i = 0; i < EXT2_BLOCK_SIZE / sizeof(int); ++i){
+            if (*(indirect_inode + i) >= super_block->s_first_data_block){
+                unset_block_bitmap(*(indirect_inode + i));
                 super_block->s_free_blocks_count += 1;
                 group_desc->bg_free_blocks_count += 1;
-	  		}
-  		}
-  	}
+            } else {
+                break;
+            }
+        }
+    }
 }
-
 int main(int argc, char **argv){
 	int target_inode_num;
 	int parent_dir_inode_num;
