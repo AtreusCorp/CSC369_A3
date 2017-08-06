@@ -23,7 +23,8 @@ size_t dest_path_len;
 // help functions
 int map_disk(char *);
 void set_filestream(char *);
-size_t copy_stream_to_inode(FILE *, struct ext2_inode *);
+size_t copy_stream_to_inode(struct ext2_inode *);
+size_t copy_stream_to_indirected_inode(struct ext2_inode *dest_inode);
 
 // names for indices into argv
 size_t img_index = 1;
@@ -62,22 +63,24 @@ void set_filestream(char *file_path){
 }
 
 // Copy data from src filestream, by EXT2_BLOCK_SIZE increament, until we get to eof of filestream
-size_t copy_stream_to_inode(FILE* filestream, struct ext2_inode *dest_inode) {
+size_t copy_stream_to_inode(struct ext2_inode *dest_inode) {
     unsigned char block_buffer[EXT2_BLOCK_SIZE];
     int allocated_block_num;
     size_t total_bytes_read = 0;
 
     for (size_t blk_counter = 0; blk_counter < 12; ++blk_counter) {
         size_t bytes_read = fread(block_buffer, 1, EXT2_BLOCK_SIZE, src_file_stream);
-        // Allocate a new data block to dest_inode, if needed
-        if ((allocated_block_num = allocate_block()) < 0){
-            printf("Error: Block Allocation failed.\n");
-            exit(-1);
+        if (blk_counter > 0) {
+            // Allocate a new data block to dest_inode, if needed
+            if ((allocated_block_num = allocate_block()) < 0){
+                printf("Error: Block Allocation failed.\n");
+                exit(-1);
+            }
+            dest_inode->i_block[blk_counter] = (unsigned) allocated_block_num;
+            dest_inode->i_blocks += 2;
+            dest_inode->i_size += bytes_read;
         }
-        dest_inode->i_block[blk_counter] = (unsigned) allocated_block_num;
-        dest_inode->i_blocks += 2;
-        dest_inode->i_size += bytes_read;
-        memcpy((disk + allocated_block_num * EXT2_BLOCK_SIZE), block_buffer, bytes_read);
+        memcpy((disk + (dest_inode->i_block[blk_counter] * EXT2_BLOCK_SIZE)), block_buffer, bytes_read);
         memset(block_buffer, 0, EXT2_BLOCK_SIZE);
         total_bytes_read += bytes_read;
 
@@ -86,12 +89,40 @@ size_t copy_stream_to_inode(FILE* filestream, struct ext2_inode *dest_inode) {
             return total_bytes_read;
         }
     }
+    return total_bytes_read;
+}
 
-    // for as long as source file ptr has not reached the eof:
-    // copy blk by blk from src file ptr to data blocks for the first 12 blocks
-    // For 13th block, get an inode and allocate the 1st block for that inode
+size_t copy_stream_to_indirected_inode(struct ext2_inode *dest_inode) {
+    unsigned char block_buffer[EXT2_BLOCK_SIZE];
+    int allocated_block_num;
+    size_t total_bytes_read = 0;
 
-    // END Copy data from src filestream to data blocks pointed by dest_path_inode
+    // allocate a block for the 13th block for inode
+    if ((dest_inode->i_block[12] = (unsigned) allocate_block()) < 0) {
+        printf("Error: Block Allocation failed.\n");
+        exit(-1);
+    }
+    // Block ids are 32-bits in ext_2
+    int *blk_ids = (int *) (disk + dest_inode->i_block[12] * EXT2_BLOCK_SIZE);
+    for(size_t blk_counter = 0; blk_counter < 12; ++blk_counter) {
+        size_t bytes_read = fread(block_buffer, 1, EXT2_BLOCK_SIZE, src_file_stream);
+        if ((allocated_block_num = allocate_block()) < 0){
+            printf("Error: Block Allocation failed.\n");
+            exit(-1);
+        }
+        blk_ids[blk_counter] = allocated_block_num;
+        memcpy(disk + blk_ids[blk_counter] * EXT2_BLOCK_SIZE, block_buffer, bytes_read);
+        memset(block_buffer, 0, EXT2_BLOCK_SIZE);
+        dest_inode->i_blocks += 2;
+        dest_inode->i_size += bytes_read;
+        total_bytes_read += bytes_read;
+
+        if(bytes_read != EXT2_BLOCK_SIZE) {
+            // We have finished copying data already
+            return total_bytes_read;
+        }
+    }
+    return total_bytes_read;
 }
 
 int main(int argc, char **argv){
@@ -198,23 +229,19 @@ int main(int argc, char **argv){
     // === BEGIN copying data ===
 
     int dest_fullpath_inode_num;
-    if ((dest_fullpath_inode_num = get_inode_num(dest_fullpath, EXT2_ROOT_INO) < 0)) {
+    if ((dest_fullpath_inode_num = get_inode_num(dest_fullpath, EXT2_ROOT_INO)) <= 0) {
         printf("Error: Problem encountered when getting inode");
         exit(-1);
     }
     struct ext2_inode *dest_fullpath_inode = fetch_inode_from_num(dest_fullpath_inode_num);
-    size_t bytes_copied = copy_stream_to_inode(src_file_stream, dest_fullpath_inode);
+    size_t bytes_copied = copy_stream_to_inode(dest_fullpath_inode);
     if (bytes_copied < src_file_stat.st_size) {
         // Need 1 level of indirection here
-        dest_pdir_inode->i_block[12] = (unsigned) allocate_inode();
-        struct ext2_inode *indrect_inode = fetch_inode_from_num(dest_pdir_inode->i_block[12]);
-        bytes_copied += copy_stream_to_inode(src_file_stream, indrect_inode);
+        bytes_copied += copy_stream_to_indirected_inode(dest_fullpath_inode);
         if (bytes_copied != src_file_stat.st_size) {
             printf("Bytes read does not match with file size");
             exit(-1);
         }
-        dest_pdir_inode->i_size += indrect_inode->i_size;
-        dest_pdir_inode->i_blocks += indrect_inode->i_blocks;
     }
 
     // === END copying data ===
