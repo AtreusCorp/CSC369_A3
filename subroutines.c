@@ -119,10 +119,9 @@ int search_dir(char * file_name, struct ext2_inode *dir_inode) {
             const char *dir_entry_name = dir_entry->name;
             const size_t name_len = (size_t) dir_entry->name_len;
 
-            // TODO: Ask: can we still assume 1 is the bad inode?
             if ((strncmp(file_name, dir_entry_name, name_len) == 0) 
                 && strlen(file_name) == name_len
-                && (dir_entry->inode >= 1)) {
+                && (dir_entry->inode > 0)) {
                 
                 return  dir_entry->inode;
             }
@@ -258,7 +257,6 @@ unsigned char *allocate_dir_entry_slot(struct ext2_inode *p_inode,
 
     // Iterate through the direct 12 data blocks
     for(i = 0; i < 12; ++i){
-
         if (!check_block_bitmap(p_inode->i_block[i])
             || p_inode->i_block[i] <= super_block->s_first_data_block){
 
@@ -269,9 +267,6 @@ unsigned char *allocate_dir_entry_slot(struct ext2_inode *p_inode,
             p_inode->i_block[i] = cur_block;
             p_inode->i_blocks += 2;
             p_inode->i_size += EXT2_BLOCK_SIZE;
-            ((struct ext2_dir_entry_2 *)
-                (disk + p_inode->i_block[i] * EXT2_BLOCK_SIZE))->rec_len = EXT2_BLOCK_SIZE;
-
         }
         first_entry = disk + p_inode->i_block[i] * EXT2_BLOCK_SIZE;
         cur_entry = first_entry;
@@ -293,7 +288,6 @@ unsigned char *allocate_dir_entry_slot(struct ext2_inode *p_inode,
             } else {
                 cur_dir_entry_size = 0;
             }
-
             unallocated_gap_size = cur_dir_entry->rec_len - cur_dir_entry_size;
 
             // 4 byte alignment
@@ -321,9 +315,8 @@ unsigned char *allocate_dir_entry_slot(struct ext2_inode *p_inode,
 
             // The case where the block is entirely empty
             } else if (cur_dir_entry->rec_len == 0){
-                dir_entry->rec_len = EXT2_BLOCK_SIZE;
                 cur_dir_entry->inode = dir_entry->inode;
-                cur_dir_entry->rec_len = dir_entry->rec_len;
+                cur_dir_entry->rec_len = EXT2_BLOCK_SIZE;
                 cur_dir_entry->name_len = dir_entry->name_len;
                 cur_dir_entry->file_type = dir_entry->file_type;
                 strncpy(cur_dir_entry->name, dir_entry->name, dir_entry->name_len);
@@ -342,8 +335,8 @@ unsigned char *allocate_dir_entry_slot(struct ext2_inode *p_inode,
  * directory entry, NULL if it was not found.
  */
 struct ext2_dir_entry_2 *find_dir_entry(struct ext2_inode *p_inode, 
-                              char *victim_name,
-                              unsigned int victim_inode_num){
+                                        char *victim_name,
+                                        unsigned int victim_inode_num){
 
     struct ext2_super_block *super_block = (struct ext2_super_block *) (disk + EXT2_BLOCK_SIZE);
     int i;
@@ -354,7 +347,6 @@ struct ext2_dir_entry_2 *find_dir_entry(struct ext2_inode *p_inode,
     for(i = 0; i < 12; ++i){
         if (!check_block_bitmap(p_inode->i_block[i])
             || p_inode->i_block[i] <= super_block->s_first_data_block){
-
             return NULL;
         }
         first_entry = disk + p_inode->i_block[i] * EXT2_BLOCK_SIZE;
@@ -447,7 +439,7 @@ int insert_cur_and_parent_dir(unsigned int p_inode_num,
             free(new_entry);
             return -1;
     }
-    ++fetch_inode_from_num(p_inode_num)->i_links_count;
+    ++(fetch_inode_from_num(p_inode_num)->i_links_count);
     free(new_entry);
     return 0;
 }
@@ -477,8 +469,8 @@ int insert_dir_entry(struct ext2_inode *p_inode,
         }
     }
     new_entry->inode = e_inode_num;
-
     allocated_inode = fetch_inode_from_num(e_inode_num);
+
     if (file_type == EXT2_FT_REG_FILE){
         allocated_inode->i_mode |= EXT2_S_IFREG;
 
@@ -495,13 +487,12 @@ int insert_dir_entry(struct ext2_inode *p_inode,
     }
 
     if(allocate_dir_entry_slot(p_inode, new_entry) == NULL){
-
         printf("Error: dir entry allocation failed.\n");
-            free(new_entry);
-            return -1;
+        free(new_entry);
+        return -1;
     }
 
-    // Set up the directory properly
+    // Set up a directory properly
     if (file_type == EXT2_FT_DIR){
         insert_cur_and_parent_dir(parent_dir_inode_num, allocated_inode, e_inode_num);
     }

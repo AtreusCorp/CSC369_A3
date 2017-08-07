@@ -16,7 +16,7 @@ void unset_blocks_and_inodes(unsigned int inode_num,
     group_desc->bg_free_inodes_count += 1;
 
     for (int i = 0; i < 12; ++i){
-        if (inode->i_block[i] >= EXT2_GOOD_OLD_FIRST_INO){
+        if (inode->i_block[i] >= super_block->s_first_data_block){
             unset_block_bitmap(inode->i_block[i]);
             super_block->s_free_blocks_count += 1;
             group_desc->bg_free_blocks_count += 1;
