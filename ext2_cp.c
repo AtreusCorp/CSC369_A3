@@ -104,7 +104,7 @@ size_t copy_stream_to_indirected_inode(struct ext2_inode *dest_inode) {
     }
     // Block ids are 32-bits in ext_2
     int *blk_ids = (int *) (disk + dest_inode->i_block[12] * EXT2_BLOCK_SIZE);
-    for(size_t blk_counter = 0; blk_counter < 12; ++blk_counter) {
+    for(size_t blk_counter = 0; blk_counter < EXT2_BLOCK_SIZE / sizeof(int); ++blk_counter) {
         size_t bytes_read = fread(block_buffer, 1, EXT2_BLOCK_SIZE, src_file_stream);
         if ((allocated_block_num = allocate_block()) < 0){
             printf("Error: Block Allocation failed.\n");
