@@ -253,7 +253,6 @@ unsigned char *allocate_dir_entry_slot(struct ext2_inode *p_inode,
     int unallocated_gap_size_alligned;
     unsigned char *first_entry;
     unsigned char *cur_entry;
-    p_inode->i_size += dir_size;
 
     // Iterate through the direct 12 data blocks
     for(i = 0; i < 12; ++i){
@@ -266,6 +265,7 @@ unsigned char *allocate_dir_entry_slot(struct ext2_inode *p_inode,
             }
             p_inode->i_block[i] = cur_block;
             p_inode->i_blocks += 2;
+            p_inode->i_size += EXT2_BLOCK_SIZE;
         }
         first_entry = disk + p_inode->i_block[i] * EXT2_BLOCK_SIZE;
         cur_entry = first_entry;
@@ -476,6 +476,7 @@ int insert_dir_entry(struct ext2_inode *p_inode,
 
     } else if (file_type == EXT2_FT_DIR){
         allocated_inode->i_mode |= EXT2_S_IFDIR;
+        allocated_inode->i_size = EXT2_BLOCK_SIZE;
 
     } else if (file_type == EXT2_FT_SYMLINK){
         allocated_inode->i_mode |= EXT2_S_IFLNK;
