@@ -161,7 +161,10 @@ int main(int argc, char **argv){
   	}
 
     // Refers to the target directory prefixed by '/'
-    parent_dir_end = strrchr(argv[path_index], '/');
+    if ((parent_dir_end = strrchr(argv[2], '/')) == NULL){
+        printf("Error: %s does not exist.\n", argv[2]);
+        return ENOENT;
+    }
 
     // If the target directory had a slash at the end, handle accordingly
     if (strlen(parent_dir_end + 1) == 0){
@@ -175,7 +178,6 @@ int main(int argc, char **argv){
         	   "file cannot exist on this system.\n");
         return EEXIST;
     }
-
     strncpy(target_dir, parent_dir_end + 1, EXT2_NAME_LEN);
     *(parent_dir_end + 1) = '\0';
     strncpy(parent_dir, argv[path_index], EXT2_NAME_LEN);
