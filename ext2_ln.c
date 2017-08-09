@@ -4,7 +4,7 @@ unsigned char *disk;
 
 int main(int argc, char **argv){
 	int soft_flag = 0;
-	int targeted_file_index = 2;
+	int targeted_file_index = 3;
 	int targeted_file_path_len;
 	int target_dir_inode_num;
 	struct ext2_inode *target_dir_inode;
@@ -14,21 +14,26 @@ int main(int argc, char **argv){
 	int source_file_inode_num;
 	int source_file_path_len;
 	struct ext2_inode *source_file_inode;
-	int source_file_index = 3;
-	int fd = open(argv[1], O_RDWR);
-
-
-	if((disk = mmap(NULL, 128 * 1024, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0)) == MAP_FAILED){
-    	perror("Error");
-    	exit(1);
-    }
+	int source_file_index = 2;
+    int fd;
 
     // Check for the "soft" flag
 	if (strncmp(argv[2], "-s", 2) == 0){
 		soft_flag = 1;
-		targeted_file_index = 3;
-		source_file_index = 4;
+		targeted_file_index = 4;
+		source_file_index = 3;
 	}
+
+	if ((fd = open(argv[1], O_RDWR)) < 0) {
+        printf("%s: Invalid img path\n", argv[source_file_index]);
+        exit(-1);
+    }
+
+	if((disk = mmap(NULL, 128 * 1024, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0)) == MAP_FAILED){
+    	perror("Error");
+    	exit(-1);
+    }
+
 
 	// Checks
 	targeted_file_path_len = strlen(argv[targeted_file_index]);
@@ -58,7 +63,7 @@ int main(int argc, char **argv){
 	}
 
 	if ((target_dir_name_end = strrchr(argv[targeted_file_index], '/')) == NULL){
-        printf("Error: %s does not exist.\n", argv[2]);
+        printf("Error: %s Invalid path.\n", argv[targeted_file_index]);
         return ENOENT;
     }
     strncpy(target_file_name, target_dir_name_end + 1, EXT2_NAME_LEN);
