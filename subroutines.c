@@ -230,7 +230,6 @@ int allocate_inode(){
         }
         (inode_table + found_inode - 1)->i_block[0] = allocated_block;
         (inode_table + found_inode - 1)->i_blocks = 2;
-        (inode_table + found_inode - 1)->i_size = EXT2_BLOCK_SIZE;
         (inode_table + found_inode - 1)->i_links_count = 1;
         group_desc->bg_free_inodes_count -= 1;
         super_block->s_free_inodes_count -= 1;
@@ -414,8 +413,8 @@ struct ext2_dir_entry_2 *find_prev_dir_entry(struct ext2_inode *p_inode,
 }
 
 int insert_cur_and_parent_dir(unsigned int p_inode_num, 
-                                       struct ext2_inode *cur_inode,
-                                       unsigned int cur_inode_num){
+                              struct ext2_inode *cur_inode,
+                              unsigned int cur_inode_num){
 
     struct ext2_dir_entry_2 *new_entry = calloc(1, sizeof(struct ext2_dir_entry_2) 
                                                 + sizeof(char) * 2);
@@ -430,6 +429,7 @@ int insert_cur_and_parent_dir(unsigned int p_inode_num,
             return -1;
     }
     ++cur_inode->i_links_count;
+
     new_entry->name_len = 2;
     new_entry->inode = p_inode_num;
     strncpy(new_entry->name, "..", 2);
@@ -450,11 +450,11 @@ int insert_cur_and_parent_dir(unsigned int p_inode_num,
  * -1 otherwise.
  */
 int insert_dir_entry(struct ext2_inode *p_inode, 
-                              unsigned int parent_dir_inode_num,
-                              int e_inode_num,
-                              unsigned char name_len,
-                              unsigned char file_type,
-                              char *name){
+                     unsigned int parent_dir_inode_num,
+                     int e_inode_num,
+                     unsigned char name_len,
+                     unsigned char file_type,
+                     char *name){
     struct ext2_inode *allocated_inode;
     struct ext2_dir_entry_2 *new_entry = malloc(sizeof(struct ext2_dir_entry_2) + sizeof(char) * name_len);
     new_entry->file_type = file_type;
@@ -476,6 +476,7 @@ int insert_dir_entry(struct ext2_inode *p_inode,
 
     } else if (file_type == EXT2_FT_DIR){
         allocated_inode->i_mode |= EXT2_S_IFDIR;
+        allocated_inode->i_size = EXT2_BLOCK_SIZE;
 
     } else if (file_type == EXT2_FT_SYMLINK){
         allocated_inode->i_mode |= EXT2_S_IFLNK;
@@ -504,11 +505,13 @@ int remove_dir_entry(struct ext2_inode *p_inode,
                      char *victim_name,
                      unsigned int victim_inode_num){
     struct ext2_dir_entry_2 *victim_dir_entry = find_dir_entry(p_inode, 
-        victim_name, 
-        victim_inode_num);
+                                                               victim_name, 
+                                                               victim_inode_num);
     struct ext2_dir_entry_2 *victim_dir_entry_prev = find_prev_dir_entry(p_inode, 
-        victim_name, 
-        victim_inode_num);
+                                                                         victim_name, 
+                                                                         victim_inode_num);
+    p_inode->i_size -= sizeof(struct ext2_dir_entry_2) 
+                       + sizeof(char) * victim_dir_entry->name_len;
 
     // If victim_dir_entry is not the first entry
     if ((victim_dir_entry != NULL) && (victim_dir_entry_prev != NULL)){
