@@ -510,8 +510,6 @@ int remove_dir_entry(struct ext2_inode *p_inode,
     struct ext2_dir_entry_2 *victim_dir_entry_prev = find_prev_dir_entry(p_inode, 
                                                                          victim_name, 
                                                                          victim_inode_num);
-    p_inode->i_size -= sizeof(struct ext2_dir_entry_2) 
-                       + sizeof(char) * victim_dir_entry->name_len;
 
     // If victim_dir_entry is not the first entry
     if ((victim_dir_entry != NULL) && (victim_dir_entry_prev != NULL)){

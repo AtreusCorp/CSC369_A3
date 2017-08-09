@@ -113,8 +113,9 @@ int main(int argc, char **argv){
 			return -1;
 		}
 		new_file_inode = fetch_inode_from_num(new_file_inode_num);
+		new_file_inode->i_size += strlen(argv[source_file_index]) * sizeof(char);
 		beginning_of_block = disk + new_file_inode->i_block[0] * EXT2_BLOCK_SIZE;
-		strncpy((char *) beginning_of_block, argv[source_file_index] + 1, EXT2_NAME_LEN);
+		strncpy((char *) beginning_of_block, argv[source_file_index], EXT2_NAME_LEN);
 		return 0;
 	}
 }
