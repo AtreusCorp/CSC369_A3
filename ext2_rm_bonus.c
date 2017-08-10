@@ -161,7 +161,7 @@ int main(int argc, char **argv){
   	}
 
     // Refers to the target directory prefixed by '/'
-    if ((parent_dir_end = strrchr(argv[2], '/')) == NULL){
+    if ((parent_dir_end = strrchr(argv[path_index], '/')) == NULL){
         printf("Error: %s does not exist.\n", argv[2]);
         return ENOENT;
     }
