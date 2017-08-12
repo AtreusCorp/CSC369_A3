@@ -8,8 +8,6 @@ void print_entries(struct ext2_inode *dir_inode, int a_flag){
 	int i;
 	unsigned char *first_entry;
     unsigned char *cur_entry;
-    char *cur_dir = ".";
-    char *parent_dir = "..";
 
 	for(i = 0; i < 12; ++i){
         if (check_block_bitmap(dir_inode->i_block[i])
@@ -26,9 +24,9 @@ void print_entries(struct ext2_inode *dir_inode, int a_flag){
                 	char *dir_entry_name = dir_entry->name;
                 	size_t name_len = (size_t) dir_entry->name_len;
 
-                	// If the all flag is present or the directory is not . or ..
-					if (a_flag || !((strncmp(dir_entry_name, cur_dir, name_len) == 0)
-                			   	    || (strncmp(dir_entry_name, parent_dir, name_len) == 0))){
+                	// If the all flag is present or the directory is 
+                	// not prefixed by .
+					if (a_flag || !(dir_entry_name[0] == '.')){
 
 						printf("%.*s\n", (int) name_len, dir_entry_name);
                 	}
