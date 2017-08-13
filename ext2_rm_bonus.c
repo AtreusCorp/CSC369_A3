@@ -87,12 +87,6 @@ void recursive_remove(unsigned int dir_inum_to_delete,
 
                     recursive_remove(dir_entry_inode_num, 
                                      dir_inum_to_delete);
-                    --dir_entry_inode->i_links_count;
-
-                    if (dir_entry_inode->i_links_count == 0){
-                        unset_blocks_and_inodes(dir_entry_inode_num, 
-                                                dir_entry_inode);
-                    }
                 } else {
                     char dir_entry_name[EXT2_NAME_LEN + 1];
                     strncpy(dir_entry_name, dir_entry->name, dir_entry->name_len);
@@ -112,7 +106,6 @@ void recursive_remove(unsigned int dir_inum_to_delete,
                 } else if (dir_entry_inode_num == parent_inum){
                     --fetch_inode_from_num(parent_inum)->i_links_count;
                 }
-
             }
             cur_entry += dir_entry_rec_len;
         } while ((cur_entry - first_entry) % EXT2_BLOCK_SIZE != 0);

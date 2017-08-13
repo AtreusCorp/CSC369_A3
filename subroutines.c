@@ -240,6 +240,8 @@ int allocate_inode(){
     return -1;
 }
 
+/* Insert dir_entry into a data block of the directory with inode p_inode
+ */
 unsigned char *allocate_dir_entry_slot(struct ext2_inode *p_inode, 
                                        struct ext2_dir_entry_2 *dir_entry){
 
@@ -501,6 +503,10 @@ int insert_dir_entry(struct ext2_inode *p_inode,
     return 0;
 }
 
+
+/* Remove the directory entry in p_inode with name victim_name 
+ * (NULL terminated) and inode number equal to victim_inode_num.
+ */
 int remove_dir_entry(struct ext2_inode *p_inode, 
                      char *victim_name,
                      unsigned int victim_inode_num){
