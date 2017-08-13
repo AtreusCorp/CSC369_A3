@@ -13,6 +13,6 @@ all: $(SRCS) $(DEPS)
 		$(CC) $(CFLAGS) $(BASE) ext2_rm_bonus.c -o ext2_rm_bonus
 
 %: %.c $(DEPS)
-		$(CC) $(CFLAGS) $(BASE) $< -o $<.c
+		$(CC) $(CFLAGS) $(BASE) $< -o $@
 clean:
 		rm -f $(BINARIES)
