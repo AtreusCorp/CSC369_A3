@@ -457,6 +457,9 @@ int insert_dir_entry(struct ext2_inode *p_inode,
                      unsigned char name_len,
                      unsigned char file_type,
                      char *name){
+
+    struct ext2_group_desc *group_desc = (struct ext2_group_desc *)
+                                            (disk + 2 * EXT2_BLOCK_SIZE);
     struct ext2_inode *allocated_inode;
     struct ext2_dir_entry_2 *new_entry = malloc(sizeof(struct ext2_dir_entry_2) + sizeof(char) * name_len);
     new_entry->file_type = file_type;
@@ -469,16 +472,22 @@ int insert_dir_entry(struct ext2_inode *p_inode,
             printf("Error: inode allocation failed.\n");
             return -1;
         }
+        allocated_inode = fetch_inode_from_num(e_inode_num);
+
+        if (file_type == EXT2_FT_DIR){
+            allocated_inode->i_size = EXT2_BLOCK_SIZE;
+            ++group_desc->bg_used_dirs_count;
+        }
+    } else {
+        allocated_inode = fetch_inode_from_num(e_inode_num);
     }
     new_entry->inode = e_inode_num;
-    allocated_inode = fetch_inode_from_num(e_inode_num);
 
     if (file_type == EXT2_FT_REG_FILE){
         allocated_inode->i_mode |= EXT2_S_IFREG;
 
     } else if (file_type == EXT2_FT_DIR){
         allocated_inode->i_mode |= EXT2_S_IFDIR;
-        allocated_inode->i_size = EXT2_BLOCK_SIZE;
 
     } else if (file_type == EXT2_FT_SYMLINK){
         allocated_inode->i_mode |= EXT2_S_IFLNK;

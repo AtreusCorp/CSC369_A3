@@ -12,6 +12,10 @@ void unset_blocks_and_inodes(unsigned int inode_num,
     struct ext2_group_desc *group_desc = (struct ext2_group_desc *)
                                             (disk + 2 * EXT2_BLOCK_SIZE);
     unset_inode_bitmap(inode_num);
+    
+    if (S_ISDIR(inode->i_mode)){
+        --group_desc->bg_used_dirs_count;
+    }
     super_block->s_free_inodes_count += 1;
     group_desc->bg_free_inodes_count += 1;
 
