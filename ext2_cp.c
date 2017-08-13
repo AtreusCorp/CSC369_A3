@@ -72,8 +72,8 @@ size_t copy_stream_to_inode(struct ext2_inode *dest_inode) {
     unsigned char block_buffer[EXT2_BLOCK_SIZE];
     int allocated_block_num;
     size_t total_bytes_read = 0;
-
-    for (size_t blk_counter = 0; blk_counter < 12; ++blk_counter) {
+    size_t blk_counter;
+    for (blk_counter = 0; blk_counter < 12; ++blk_counter) {
         size_t bytes_read = fread(block_buffer, 1, EXT2_BLOCK_SIZE, src_file_stream);
         if (blk_counter > 0) {
 
@@ -112,8 +112,8 @@ size_t copy_stream_to_indirected_inode(struct ext2_inode *dest_inode) {
     dest_inode->i_block[12] = allocated_block_num;
 
     int *blk_ids = (int *) (disk + dest_inode->i_block[12] * EXT2_BLOCK_SIZE);
-
-    for(size_t blk_counter = 0; blk_counter < EXT2_BLOCK_SIZE / sizeof(int); ++blk_counter) {
+    size_t blk_counter;
+    for(blk_counter = 0; blk_counter < EXT2_BLOCK_SIZE / sizeof(int); ++blk_counter) {
         size_t bytes_read = fread(block_buffer, 1, EXT2_BLOCK_SIZE, src_file_stream);
 
         if ((allocated_block_num = allocate_block()) < 0){
