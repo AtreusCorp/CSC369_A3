@@ -48,9 +48,13 @@ int main(int argc, char **argv){
 	int dir_inode_num;
 	int fd = open(argv[1], O_RDWR);
 
+    if (argc < 3) {
+        printf("Please provide all the needed arguments.\n");
+        exit(-1);
+    }
     if((disk = mmap(NULL, 128 * 1024, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0)) == MAP_FAILED){
     	perror("Error");
-    	exit(1);
+    	exit(-1);
     }
 
     // Check for the "all" flag
