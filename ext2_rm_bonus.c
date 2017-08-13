@@ -15,7 +15,8 @@ void unset_blocks_and_inodes(unsigned int inode_num,
     super_block->s_free_inodes_count += 1;
     group_desc->bg_free_inodes_count += 1;
 
-    for (int i = 0; i < 12; ++i){
+    int i;
+    for (i = 0; i < 12; ++i){
         if (inode->i_block[i] >= super_block->s_first_data_block){
             unset_block_bitmap(inode->i_block[i]);
             super_block->s_free_blocks_count += 1;
@@ -26,7 +27,8 @@ void unset_blocks_and_inodes(unsigned int inode_num,
     if (inode->i_block[12] >= super_block->s_first_data_block){
         int *indirect_inode = (int *)(disk + inode->i_block[12] * EXT2_BLOCK_SIZE);
 
-        for (int i = 0; i < EXT2_BLOCK_SIZE / sizeof(int); ++i){
+        int i;
+        for (i = 0; i < EXT2_BLOCK_SIZE / sizeof(int); ++i){
             if (*(indirect_inode + i) >= super_block->s_first_data_block){
                 unset_block_bitmap(*(indirect_inode + i));
                 super_block->s_free_blocks_count += 1;
