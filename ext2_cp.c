@@ -22,7 +22,7 @@ size_t dest_path_len;
 
 // help functions
 int map_disk(char *);
-void set_filestream(char *);
+int set_filestream(char *);
 size_t copy_stream_to_inode(struct ext2_inode *);
 size_t copy_stream_to_indirected_inode(struct ext2_inode *dest_inode);
 
@@ -45,7 +45,7 @@ int map_disk(char *img_path) {
     return 0;
 }
 
-void set_filestream(char *file_path){
+int set_filestream(char *file_path){
 
     int fd;
     fstat((fd=open(file_path, O_RDONLY)), &src_file_stat);
@@ -53,18 +53,19 @@ void set_filestream(char *file_path){
     if (src_file_stat.st_size > (12 + (EXT2_BLOCK_SIZE / sizeof(int))) * EXT2_BLOCK_SIZE){
         printf("Error: %s's size is larger than 13 blocks", file_path);
         close(fd);
-        exit(-1);
+        return -1;
     } else if (!S_ISREG(src_file_stat.st_mode)){
-        printf("Error: %s is not a regular file.\n", file_path);
+        printf("Error: %s Invalid source.\n", file_path);
         close(fd);
-        exit(-1);
+        return -1;
     }
     close(fd);
 
     if ((src_file_stream = fopen(file_path, "r")) == NULL) {
         printf("%s: No such file or directory\n", file_path);
-        exit(-1);
+        return -1;
     }
+    return 0;
 }
 
 // Copy EXT2_BLOCK_SIZE of data at a time from src_file_stream until we get to EOF
@@ -140,11 +141,14 @@ int main(int argc, char **argv){
 
     // map the disk into memory
     if (map_disk(argv[img_index]) < 0) {
-       exit(-1);
+        printf("Invalid disk img\n");
+        return ENOENT;
     }
 
     // map the maximum file size. This utility can handle and check if original file on host exist
-    set_filestream(argv[src_path_index]);
+    if(set_filestream(argv[src_path_index]) < 0) {
+        return ENOENT;
+    }
 
     strncpy(dest_path, argv[dest_path_index], EXT2_NAME_LEN);
     strncpy(src_path, argv[src_path_index], EXT2_NAME_LEN);
@@ -172,7 +176,7 @@ int main(int argc, char **argv){
     super_block = (struct ext2_super_block *) (disk + EXT2_BLOCK_SIZE);
     if (super_block->s_free_blocks_count*EXT2_BLOCK_SIZE < src_file_stat.st_size) {
         printf("Insufficient disk space.\n");
-        exit(-1);
+        return ENOENT;
     }
 
     // === END Error checking ===
@@ -188,7 +192,7 @@ int main(int argc, char **argv){
         strncpy(dest_path_cpy, dest_path, dest_path_len);
         if ((dest_pdir_end = strrchr(dest_path_cpy, '/')) == NULL) {
             printf("Error: Processing destination file name.\n");
-            exit(-1);
+            return ENOENT;
         }
         strncpy(dest_filename, dest_pdir_end + 1, EXT2_NAME_LEN);
         *(dest_pdir_end + 1) = '\0';
@@ -202,7 +206,7 @@ int main(int argc, char **argv){
         // assignment for dest_filename
         if ((src_dir_end = strrchr(src_path, '/')) == NULL){
             printf("Error: Processing source file name.\n");
-            exit(-1);
+            return ENOENT;
         }
         strncpy(src_filename, src_dir_end + 1, EXT2_NAME_LEN);
         strncpy(dest_filename, src_filename, EXT2_NAME_LEN);
@@ -218,7 +222,7 @@ int main(int argc, char **argv){
     strncpy(dest_fullpath, dest_pdir_pathname, EXT2_NAME_LEN);
     strncat(dest_fullpath, dest_filename, EXT2_NAME_LEN);
     if(get_inode_num(dest_fullpath, EXT2_ROOT_INO) >= 1) {
-        printf("%s: The destination file already exists.\n", dest_path);
+        printf("%s: The destination file already exists.\n", dest_fullpath);
         return ENOENT;
     }
 
@@ -226,7 +230,11 @@ int main(int argc, char **argv){
 
 
     // Directory to perform insert on
-    int dest_pdir_inode_num = get_inode_num(dest_pdir_pathname, EXT2_ROOT_INO);
+    int dest_pdir_inode_num;
+    if((dest_pdir_inode_num = get_inode_num(dest_pdir_pathname, EXT2_ROOT_INO)) < 0) {
+        printf("The destination folder doesn't exist\n");
+        return ENOENT;
+    }
     struct ext2_inode *dest_pdir_inode = fetch_inode_from_num(dest_pdir_inode_num);
 
 
